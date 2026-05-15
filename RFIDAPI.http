@@ -1,0 +1,37 @@
+@RFIDAPI_HostAddress = http://localhost:5083
+
+### CONNECT
+GET {{RFIDAPI_HostAddress}}/api/uhf/connect?ip=172.19.67.11&port=8888
+Accept: application/json
+
+### DISCONNECT
+GET {{RFIDAPI_HostAddress}}/api/uhf/disconnect?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+Accept: application/json
+
+### READ
+GET {{RFIDAPI_HostAddress}}/api/uhf/read?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+Accept: application/json
+
+### WRITE
+POST {{RFIDAPI_HostAddress}}/api/uhf/write?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97&epcCode=000000000000000000000000
+Accept: application/json
+
+### PRODUCTION SCAN
+POST {{RFIDAPI_HostAddress}}/api/uhf/production-scan?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97&barcode=CFM258999L
+Accept: application/json
+
+### WAREHOUSE STOCK IN
+POST {{RFIDAPI_HostAddress}}/api/uhf/warehouse-stock-in?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+Accept: application/json
+
+### WAREHOUSE STOCK OUT
+POST {{RFIDAPI_HostAddress}}/api/uhf/warehouse-stock-out?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+Accept: application/json
+
+### START READ
+GET {{RFIDAPI_HostAddress}}/api/uhf/start-read?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+Accept: application/json
+
+### STOP READ
+GET {{RFIDAPI_HostAddress}}/api/uhf/stop-read?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+Accept: application/json
