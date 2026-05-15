@@ -280,6 +280,10 @@ obj/
 /node_modules
 /wwwroot/node_modules
 
+# Local application configuration
+appsettings.json
+appsettings.dev.json
+
 ### VisualStudioCode ###
 .vscode/*
 !.vscode/settings.json
