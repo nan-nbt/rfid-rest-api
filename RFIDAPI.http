@@ -1,37 +1,38 @@
-@RFIDAPI_HostAddress = http://localhost:5083
+@HOST_ADDRESS = http://localhost:5083
+@CONNECTION_ID = 6211469c-4b9b-4485-823b-ec647f3a3828
 
 ### CONNECT
-GET {{RFIDAPI_HostAddress}}/api/uhf/connect?ip=172.19.67.11&port=8888
+GET {{HOST_ADDRESS}}/api/uhf/connect?ip=172.19.67.11&port=8888
 Accept: application/json
 
 ### DISCONNECT
-GET {{RFIDAPI_HostAddress}}/api/uhf/disconnect?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+GET {{HOST_ADDRESS}}/api/uhf/disconnect?connectionId={{CONNECTION_ID}}
 Accept: application/json
 
 ### READ
-GET {{RFIDAPI_HostAddress}}/api/uhf/read?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+GET {{HOST_ADDRESS}}/api/uhf/read?connectionId={{CONNECTION_ID}}
 Accept: application/json
 
 ### WRITE
-POST {{RFIDAPI_HostAddress}}/api/uhf/write?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97&epcCode=000000000000000000000000
+POST {{HOST_ADDRESS}}/api/uhf/write?connectionId={{CONNECTION_ID}}&epcCode=000000000000000000000000
 Accept: application/json
 
 ### PRODUCTION SCAN
-POST {{RFIDAPI_HostAddress}}/api/uhf/production-scan?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97&barcode=CFM258999L
+POST {{HOST_ADDRESS}}/api/uhf/production-scan?connectionId={{CONNECTION_ID}}&barcode=CFM258999L
 Accept: application/json
 
 ### WAREHOUSE STOCK IN
-POST {{RFIDAPI_HostAddress}}/api/uhf/warehouse-stock-in?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+POST {{HOST_ADDRESS}}/api/uhf/warehouse-stock-in?connectionId={{CONNECTION_ID}}
 Accept: application/json
 
 ### WAREHOUSE STOCK OUT
-POST {{RFIDAPI_HostAddress}}/api/uhf/warehouse-stock-out?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+POST {{HOST_ADDRESS}}/api/uhf/warehouse-stock-out?connectionId={{CONNECTION_ID}}
 Accept: application/json
 
 ### START READ
-GET {{RFIDAPI_HostAddress}}/api/uhf/start-read?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+GET {{HOST_ADDRESS}}/api/uhf/start-read?connectionId={{CONNECTION_ID}}
 Accept: application/json
 
 ### STOP READ
-GET {{RFIDAPI_HostAddress}}/api/uhf/stop-read?connectionId=f353cce1-09a3-4d0a-abf3-f49185ab0f97
+GET {{HOST_ADDRESS}}/api/uhf/stop-read?connectionId={{CONNECTION_ID}}
 Accept: application/json
