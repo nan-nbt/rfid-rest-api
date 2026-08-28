@@ -1,17 +1,15 @@
-using System.Collections;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Collections;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class UHFController : ControllerBase
 {
     private readonly IDbContextFactory<AppDbContext> _factory;
     private readonly RFIDConnectionManager _connectionManager;
-    // private static UHFService[] services = new UHFService[10];
-    // private static readonly object _lock = new object();
-    // private static readonly Dictionary<string, int> connectedClients = new Dictionary<string, int>();
-    // private static readonly Dictionary<string, string> connectedDevices = new Dictionary<string, string>();
 
     /*
      * Constructor
@@ -102,28 +100,6 @@ public class UHFController : ControllerBase
             connectionId,
             status = "Connected"
         });
-        
-        // var service = new UHFService(_factory);
-        // int indexService = 0;
-
-        // for (int i = 0; i < services.Length; i++)
-        // {
-        //     if (services[i] == null)
-        //     {
-        //         services[i] = service;
-        //         indexService = i;
-        //         break;
-        //     }
-        // }
-
-        // var result = services[indexService].Connect(ip, port);
-
-        // return new JsonResult(new
-        // {
-        //     result,
-        //     indexService,
-        //     status = result ? "Connected" : "Can not connect"
-        // });
     }
 
     [HttpGet("disconnect")]
@@ -153,25 +129,6 @@ public class UHFController : ControllerBase
                 ? "Disconnected"
                 : "Can not disconnect"
         });
-
-        // if (services[indexService] == null)
-        // {
-        //     return NotFound(new
-        //     {
-        //         message = "Service not found"
-        //     });
-        // }
-
-        // var result = services[indexService].Disconnect(ip, port);
-
-        // services[indexService] = null;
-
-        // return new JsonResult(new
-        // {
-        //     result,
-        //     indexService,
-        //     status = result ? "Disonnected" : "Can not disconnect"
-        // });
     }
 
     [HttpGet("read")]
@@ -450,121 +407,6 @@ public class UHFController : ControllerBase
             result,
             status = "success"
         });
-
-        // open comment block for read inventory or multiple tag
-        // if (services[indexService] == null)
-        // {
-        //     return NotFound(new
-        //     {
-        //         message = "Service not found"
-        //     });
-        // }
-
-        // var inventory = services[indexService].StartReadInventory();
-
-        // if (!inventory)
-        // {
-        //     return NotFound(new
-        //     {
-        //         message = "Failed to start read inventory"
-        //     });
-        // }
-
-        // List<UHFTAGInfo> tagList = await services[indexService].GetListEPC();
-
-        // if (tagList == null)
-        // {
-        //     services[indexService].StopReadInventory();
-
-        //     return NotFound(new
-        //     {
-        //         message = "Failed to get list EPC"
-        //     });
-        // }
-
-        // foreach (var item in tagList)
-        // {
-        //     string rfidCode = item.Epc.Replace(" ", "").Substring(0, 20);
-
-        //     var sampleBarcode = await services[indexService].FindRFIDCode(rfidCode);
-            
-        //     if (string.IsNullOrEmpty(sampleBarcode.rfid_code))
-        //     {
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "RFID code " + rfidCode + " does not exist in database"
-        //         });
-        //     }
-
-        //     if (sampleBarcode.prod_mk == "N")
-        //     {
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " not production scanned"
-        //         });
-        //     }
-
-        //     if (sampleBarcode.inout_mk == "A")
-        //     {
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " already stocoked in warehouse"
-        //         });
-        //     }
-
-        //     string demMk = "1111";
-        //     string inoutMk = "A";  
-
-        //     var writeEpc = await services[indexService].WriteMaskEPC(sampleBarcode.rfid_code + demMk, item.Epc.Replace(" ", ""));
-
-        //     if (!writeEpc)
-        //     {
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "Failed to write EPC code"
-        //         });
-        //     }
-
-        //     var updateResult = await services[indexService].UpdateSampleBarcodeInoutMark(sampleBarcode.rfid_code, demMk, inoutMk);
-
-        //     if (!updateResult)
-        //     {
-        //         var rollbackEpc = await services[indexService].WriteMaskEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk, item.Epc.Replace(" ", ""));
-
-        //         if (!rollbackEpc)
-        //         {
-        //             services[indexService].StopReadInventory();
-
-        //             return NotFound(new
-        //             {
-        //                 message = "Failed to rollback EPC code"
-        //             });
-        //         }
-
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "Failed to update sample barcode inout_mk"
-        //         });
-        //     }
-        // }
-
-        // services[indexService].StopReadInventory();
-
-        // return new JsonResult(new
-        // {
-        //     // tagList,
-        //     status = "success"
-        // });
     }
 
     [HttpPost("warehouse-stock-out")]
@@ -676,131 +518,6 @@ public class UHFController : ControllerBase
             result,
             status = "success"
         });
-
-        // open comment block for read inventory or multiple tag
-        // if (services[indexService] == null)
-        // {
-        //     return NotFound(new
-        //     {
-        //         message = "Service not found"
-        //     });
-        // }
-
-        // var inventory = services[indexService].StartReadInventory();
-
-        // if (!inventory)
-        // {
-        //     return NotFound(new
-        //     {
-        //         message = "Failed to start read inventory"
-        //     });
-        // }
-
-        // List<UHFTAGInfo> tagList = await services[indexService].GetListEPC();
-
-        // if (tagList == null)
-        // {
-        //     services[indexService].StopReadInventory();
-            
-        //     return NotFound(new
-        //     {
-        //         message = "Failed to get list EPC"
-        //     });
-        // }
-
-        // foreach (var item in tagList)
-        // {
-        //     string rfidCode = item.Epc.Replace(" ", "").Substring(0, 20);
-
-        //     var sampleBarcode = await services[indexService].FindRFIDCode(rfidCode);
-            
-        //     if (string.IsNullOrEmpty(sampleBarcode.rfid_code))
-        //     {
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "RFID code " + rfidCode + " does not exist in database"
-        //         });
-        //     }
-
-        //     if (sampleBarcode.prod_mk == "N")
-        //     {
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " not production scanned"
-        //         });
-        //     }
-
-        //     if (string.IsNullOrEmpty(sampleBarcode.inout_mk))
-        //     {
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " not stocoked in warehouse yet"
-        //         });                
-        //     }
-
-        //     if (sampleBarcode.inout_mk == "B")
-        //     {
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " already stocoked out warehouse"
-        //         });
-        //     }
-
-        //     string demMk = "0000";
-        //     string inoutMk = "B";
-
-        //     var writeEpc = await services[indexService].WriteMaskEPC(sampleBarcode.rfid_code + demMk, item.Epc.Replace(" ", ""));
-
-        //     if (!writeEpc)
-        //     {
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "Failed to write EPC code"
-        //         });
-        //     }
-
-        //     var updateResult = await services[indexService].UpdateSampleBarcodeInoutMark(sampleBarcode.rfid_code, demMk, inoutMk);
-
-        //     if (!updateResult)
-        //     {
-        //         var rollbackEpc = await services[indexService].WriteMaskEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk, item.Epc.Replace(" ", ""));
-
-        //         if (!rollbackEpc)
-        //         {
-        //             services[indexService].StopReadInventory();
-
-        //             return NotFound(new
-        //             {
-        //                 message = "Failed to rollback EPC code"
-        //             });
-        //         }
-
-        //         services[indexService].StopReadInventory();
-
-        //         return NotFound(new
-        //         {
-        //             message = "Failed to update sample barcode inout_mk"
-        //         });
-        //     }
-        // }
-
-        // services[indexService].StopReadInventory();
-
-        // return new JsonResult(new
-        // {
-        //     tagList,
-        //     status = "success"
-        // });
     }
 
     [HttpGet("start-read")]

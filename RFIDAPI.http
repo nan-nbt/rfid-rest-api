@@ -1,38 +1,58 @@
+@IAM_HOST_ADDRESS = https://iamlab.pouchen.com
+@IAM_CLIENT_ID = rfidapi-service-yyssivt1
+@IAM_CLIENT_SECRET = 7LWyJSpm82artuq3Y0utFQ8yICIweHlG
+@IAM_ACCESS_TOKEN = eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJPOU5UWmZyUXcyNnlnYVdaM1Itakh1Rk9XWmQxalZybWh6Yy1OZTdhdGVVIn0.eyJleHAiOjE3ODc5MDA1ODgsImlhdCI6MTc4Nzg5Njk4OCwianRpIjoiMThiNjJiMDEtN2NjNy00Mzk2LTg4NDItYTE5YjczNzAwMGMxIiwiaXNzIjoiaHR0cHM6Ly9pYW1sYWIucG91Y2hlbi5jb20vYXV0aC9yZWFsbXMvc2VydmljZSIsImF1ZCI6WyJwY2ctaWFtLXNlcnZpY2UiLCJhY2NvdW50Il0sInN1YiI6IjIxN2ExZTMwLTMwY2ItNDNiOC04Y2M1LWYxMjU5MzViYjBmMSIsInR5cCI6IkJlYXJlciIsImF6cCI6InJmaWRhcGktc2VydmljZS15eXNzaXZ0MSIsImFjciI6IjEiLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsib2ZmbGluZV9hY2Nlc3MiLCJkZWZhdWx0LXJvbGVzLXNlcnZpY2UiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7InBjZy1pYW0tc2VydmljZSI6eyJyb2xlcyI6WyJ1c2Vycy1xdWVyeSJdfSwiYWNjb3VudCI6eyJyb2xlcyI6WyJtYW5hZ2UtYWNjb3VudCIsIm1hbmFnZS1hY2NvdW50LWxpbmtzIiwidmlldy1wcm9maWxlIl19fSwic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJjbGllbnRIb3N0IjoiMTcyLjE5LjY4LjUiLCJjbGllbnRJZCI6InJmaWRhcGktc2VydmljZS15eXNzaXZ0MSIsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC1yZmlkYXBpLXNlcnZpY2UteXlzc2l2dDEiLCJjbGllbnRBZGRyZXNzIjoiMTcyLjE5LjY4LjUifQ.BYC1AZzi_IejIP-VsidkZKPkO1itDmm67mQiVHePfjWn5E9jwoXqIZ2nzWI6kO-mfZUnKAmZ8_sPCFDnrdvLvcC8tQqvEPvSCDyblMNKCw5vOnHo0g1J7dc5mDQkFc3n_c3ZF55uty4rSI52zfqkoVQxwRJQcqTof3zTKjpHCve0bg0g_9tQsdyi6IuI8e4S4tNZcq32mCDVQmN4O550jmJ4C2z8UkrFFAvEeh5mwAWfYE5eF_G7eSnFws97eQV4p-4qzVqV_CeU3oT3fpW8BY0YXj3c2fq19NQGwK1wkThVzSE1MUEw8tpTwd_W-15TwJ3SSozn_H6qST0mMnvxuA
+
 @HOST_ADDRESS = http://localhost:5083
-@CONNECTION_ID = aca99790-a8ff-48f3-b55b-72aa39eb076f
+@CONNECTION_ID = 12697b96-b95b-4d28-b322-bdaa468709b9
+
+### IAM GET TOKEN
+POST {{IAM_HOST_ADDRESS}}/auth/realms/service/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{IAM_CLIENT_ID}}&client_secret={{IAM_CLIENT_SECRET}}
 
 ### CONNECT
 GET {{HOST_ADDRESS}}/api/uhf/connect?ip=172.19.68.9&port=8888
 Accept: application/json
+Authorization: Bearer {{IAM_ACCESS_TOKEN}}
 
 ### DISCONNECT
 GET {{HOST_ADDRESS}}/api/uhf/disconnect?connectionId={{CONNECTION_ID}}
 Accept: application/json
+Authorization: Bearer {{IAM_ACCESS_TOKEN}}
 
 ### READ
 GET {{HOST_ADDRESS}}/api/uhf/read?connectionId={{CONNECTION_ID}}
 Accept: application/json
+Authorization: Bearer {{IAM_ACCESS_TOKEN}}
 
 ### WRITE
 POST {{HOST_ADDRESS}}/api/uhf/write?connectionId={{CONNECTION_ID}}&epcCode=000000000000000000000000
 Accept: application/json
+Authorization: Bearer {{IAM_ACCESS_TOKEN}}
 
 ### PRODUCTION SCAN
 POST {{HOST_ADDRESS}}/api/uhf/production-scan?connectionId={{CONNECTION_ID}}&barcode=CFM258999L
 Accept: application/json
+Authorization: Bearer {{IAM_ACCESS_TOKEN}}
 
 ### WAREHOUSE STOCK IN
 POST {{HOST_ADDRESS}}/api/uhf/warehouse-stock-in?connectionId={{CONNECTION_ID}}
 Accept: application/json
+Authorization: Bearer {{IAM_ACCESS_TOKEN}}
 
 ### WAREHOUSE STOCK OUT
 POST {{HOST_ADDRESS}}/api/uhf/warehouse-stock-out?connectionId={{CONNECTION_ID}}
 Accept: application/json
+Authorization: Bearer {{IAM_ACCESS_TOKEN}}
 
 ### START READ
 GET {{HOST_ADDRESS}}/api/uhf/start-read?connectionId={{CONNECTION_ID}}
 Accept: application/json
+Authorization: Bearer {{IAM_ACCESS_TOKEN}}
 
 ### STOP READ
 GET {{HOST_ADDRESS}}/api/uhf/stop-read?connectionId={{CONNECTION_ID}}
 Accept: application/json
+Authorization: Bearer {{IAM_ACCESS_TOKEN}}
