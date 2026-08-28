@@ -281,8 +281,9 @@ obj/
 /wwwroot/node_modules
 
 # Local application configuration
-appsettings.json
 appsettings.dev.json
+appsettings.qas.json
+appsettings.prd.json
 
 ### VisualStudioCode ###
 .vscode/*

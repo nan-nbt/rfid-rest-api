@@ -1,8 +1,8 @@
 @HOST_ADDRESS = http://localhost:5083
-@CONNECTION_ID = 6211469c-4b9b-4485-823b-ec647f3a3828
+@CONNECTION_ID = aca99790-a8ff-48f3-b55b-72aa39eb076f
 
 ### CONNECT
-GET {{HOST_ADDRESS}}/api/uhf/connect?ip=172.19.67.11&port=8888
+GET {{HOST_ADDRESS}}/api/uhf/connect?ip=172.19.68.9&port=8888
 Accept: application/json
 
 ### DISCONNECT
