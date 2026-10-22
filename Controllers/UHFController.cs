@@ -1,20 +1,34 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Collections;
+using RFIDAPI.Configurations;
+using RFIDAPI.Managers;
+using RFIDAPI.Models;
+using RFIDAPI.Services;
+using RFIDAPI.Constants;
 
+namespace RFIDAPI.Controllers;
+
+/**
+ * UhfController
+ * RBAC (Role Based Access Control) Integration
+ * @required {Authorization, Client Custom Role}
+ * - Authorization: Bearer - OAuth2.0
+ * - Client Custom Role: rfid-client-service
+ */
 [ApiController]
-[Route("api/[controller]")]
-[Authorize]
-public class UHFController : ControllerBase
+[Route("api/UHF")]
+[Authorize(Roles = "rfid-client-service")]
+public class UhfController : ControllerBase
 {
     private readonly IDbContextFactory<AppDbContext> _factory;
-    private readonly RFIDConnectionManager _connectionManager;
+    private readonly RfidConnectionManager _connectionManager;
 
-    /*
+    /**
      * Constructor
+     * @param {IDbContextFactory<AppDbContext> factory, RfidConnectionManager connectionManager}
      */
-    public UHFController(IDbContextFactory<AppDbContext> factory, RFIDConnectionManager connectionManager)
+    public UhfController(IDbContextFactory<AppDbContext> factory, RfidConnectionManager connectionManager)
     {
         _factory = factory;
         _connectionManager = connectionManager;
@@ -34,7 +48,7 @@ public class UHFController : ControllerBase
             return BadRequest(new
             {
                 result = false,
-                status = "Unable to identify client IP"
+                status = ConnectionStatus.UNABLE_IDENTIFY_CLIENT
             });
         }
 
@@ -43,7 +57,7 @@ public class UHFController : ControllerBase
             return new JsonResult(new
             {
                 result = false,
-                status = "This client already connected"
+                status = ConnectionStatus.CLIENT_ALREADY_CONNECT
             });
         }
 
@@ -54,7 +68,7 @@ public class UHFController : ControllerBase
             return BadRequest(new
             {
                 result = false,
-                status = "RFID key is empty"
+                status = ConnectionStatus.KEY_EMPTY
             });
         }
 
@@ -63,11 +77,11 @@ public class UHFController : ControllerBase
             return new JsonResult(new
             {
                 result = false,
-                status = "RFID device already in use"
+                status = ConnectionStatus.IN_USE
             });
         }
 
-        var service = new UHFService(_factory);
+        var service = new UhfService(_factory);
 
         var result = service.Connect(ip, port);
 
@@ -76,12 +90,12 @@ public class UHFController : ControllerBase
             return new JsonResult(new
             {
                 result = false,
-                status = "Can not connect to device host " + ip + ":" + port
+                status = ConnectionStatus.CAN_NOT_CONNECT + " " + ip + ":" + port
             });
         }
 
         string connectionId = Guid.NewGuid().ToString();
-        var connection = new RFIDConnection
+        var connection = new RfidConnection
         {
             ConnectionId = connectionId,
             ClientIp = clientIp,
@@ -98,7 +112,7 @@ public class UHFController : ControllerBase
         {
             result = true,
             connectionId,
-            status = "Connected"
+            status = ConnectionStatus.CONNECTED
         });
     }
 
@@ -112,7 +126,7 @@ public class UHFController : ControllerBase
             return NotFound(new
             {
                 result = false,
-                status = "Connection not found"
+                status = ConnectionStatus.CONNECTION_NOT_FOUND
             });
         }
 
@@ -126,8 +140,8 @@ public class UHFController : ControllerBase
         {
             result,
             status = result
-                ? "Disconnected"
-                : "Can not disconnect"
+                ? ConnectionStatus.DISCONNECTED
+                : ConnectionStatus.CAN_NOT_DISCONNECT
         });
     }
 
@@ -140,17 +154,17 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Connection not found"
+                message = ConnectionStatus.CONNECTION_NOT_FOUND
             });
         }
 
-        var epcCode = await connection.Service.ReadSingleEPC();
+        var epcCode = await UhfService.ReadSingleEPC();
 
         if (epcCode == string.Empty)
         {
             return NotFound(new
             {
-                message = "Failed to Read EPC Code"
+                message = Common.TAG_READ_FAILED
             });
         }
 
@@ -169,7 +183,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Connection not found"
+                message = ConnectionStatus.CONNECTION_NOT_FOUND
             });
         }
 
@@ -177,7 +191,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "EPC Code not found"
+                message = Common.EPC_NOT_FOUND
             });
         }
 
@@ -185,21 +199,21 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "EPC Code not valid. Length must be 24"
+                message = Common.EPC_NOT_VALID
             });
         }
 
-        var result = await connection.Service.WriteSingleEPC(epcCode);
+        var result = await UhfService.WriteSingleEPC(epcCode);
 
         return new JsonResult(new
         {
             result,
             epcCode,
-            status = result ? "Success" : "Failed"
+            status = result ? Common.SUCCESS : Common.FAILED
         });
     }
 
-    /*
+    /**
      * RFID custom method
      * @function {ProductionScan, WarehouseInOut}
      */
@@ -212,7 +226,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Connection not found"
+                message = ConnectionStatus.CONNECTION_NOT_FOUND
             });
         }
 
@@ -220,18 +234,18 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Barcode parameter is null or empty"
+                message = Common.BARCODE_NULL_EMPTY
             });
         }
 
-        string hexEpc = await connection.Service.ReadSingleEPC();
+        string hexEpc = await UhfService.ReadSingleEPC();
         string epc = hexEpc.Replace(" ", "");
 
         if (string.IsNullOrEmpty(epc))
         {
             return NotFound(new
             {
-                message = "Tag not found or unknown tag error"
+                message = Common.TAG_NOT_FOUND
             });
         }
 
@@ -239,7 +253,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "EPC code not valid. Required EPC code 000000000000000000000000"
+                message = Common.REQ_INIT_EPC
             });
         }
 
@@ -249,7 +263,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Barcode " + barcode + " does not exist in database"
+                message = "[" + barcode + "] " + Common.BARCODE_NOT_EXIST
             });
         }
 
@@ -257,17 +271,17 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Barcode " + sampleBarcode.barcode + " already production scanned"
+                message = "[" + sampleBarcode.barcode + "] " + Common.BARCODE_ALREADY_PRODUCTION
             });
         }
 
-        var writeEpc = await connection.Service.WriteSingleEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
+        var writeEpc = await UhfService.WriteSingleEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
 
         if (!writeEpc)
         {
             return NotFound(new
             {
-                message = "Failed to write EPC code"
+                message = Common.TAG_WRITE_FAILED
             });
         }
 
@@ -275,19 +289,19 @@ public class UHFController : ControllerBase
 
         if (!updateResult)
         {
-            var rollbackEpc = await connection.Service.WriteSingleEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
+            var rollbackEpc = await UhfService.WriteSingleEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
 
             if (!rollbackEpc)
             {
                 return NotFound(new
                 {
-                    message = "Failed to rollback EPC code"
+                    message = Common.TAG_ROLLBACK_FAILED
                 });
             }
 
             return NotFound(new
             {
-                message = "Failed to update sample barcode prod_mk"
+                message = Common.UPDATE_PROD_FAILED
             });
         }
 
@@ -297,14 +311,14 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Barcode " + barcode + " does not exist in database"
+                message = "[" + barcode + "] " + Common.BARCODE_NOT_EXIST
             });
         }
 
         return new JsonResult(new
         {
             result,
-            status = "success"
+            status = Common.SUCCESS
         });
     }
 
@@ -317,11 +331,11 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Connection not found"
+                message = ConnectionStatus.CONNECTION_NOT_FOUND
             });
         }
 
-        string hexEpc = await connection.Service.ReadSingleEPC();
+        string hexEpc = await UhfService.ReadSingleEPC();
         string epc = hexEpc.Replace(" ", "");
         string rfidCode = epc.Substring(0, 20);
 
@@ -329,7 +343,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Tag not found or unknown tag error"
+                message = Common.TAG_NOT_FOUND
             });
         }        
 
@@ -339,7 +353,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "RFID code " + rfidCode + " does not exist in database"
+                message = "[" + rfidCode + "] " + Common.TAG_NOT_EXIST
             });
         }
 
@@ -347,7 +361,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " not production scanned"
+                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_NOT_PRODUCTION
             });
         }
 
@@ -355,20 +369,20 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " already stocoked in warehouse"
+                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_IN_WAREHOUSE
             });
         }
 
         string demMk = "1111";
         string inoutMk = "A";
 
-        var writeEpc = await connection.Service.WriteSingleEPC(sampleBarcode.rfid_code + demMk);
+        var writeEpc = await UhfService.WriteSingleEPC(sampleBarcode.rfid_code + demMk);
 
         if (!writeEpc)
         {
             return NotFound(new
             {
-                message = "Failed to write EPC code"
+                message = Common.TAG_WRITE_FAILED
             });
         }
 
@@ -376,19 +390,19 @@ public class UHFController : ControllerBase
 
         if (!updateResult)
         {
-            var rollbackEpc = await connection.Service.WriteSingleEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
+            var rollbackEpc = await UhfService.WriteSingleEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
 
             if (!rollbackEpc)
             {
                 return NotFound(new
                 {
-                    message = "Failed to rollback EPC code"
+                    message = Common.TAG_ROLLBACK_FAILED
                 });
             }
 
             return NotFound(new
             {
-                message = "Failed to update sample barcode inout_mk"
+                message = Common.UPDATE_INOUT_FAILED
             });
         }
 
@@ -398,14 +412,14 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "RFID code " + rfidCode + " does not exist in database"
+                message = "[" + rfidCode + "] " + Common.TAG_NOT_EXIST
             });
         }
 
         return new JsonResult(new
         {
             result,
-            status = "success"
+            status = Common.SUCCESS
         });
     }
 
@@ -418,11 +432,11 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Connection not found"
+                message = ConnectionStatus.CONNECTION_NOT_FOUND
             });
         }
 
-        string hexEpc = await connection.Service.ReadSingleEPC();
+        string hexEpc = await UhfService.ReadSingleEPC();
         string epc = hexEpc.Replace(" ", "");
         string rfidCode = epc.Substring(0, 20);
 
@@ -430,7 +444,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Tag not found or unknown tag error"
+                message = Common.TAG_NOT_FOUND
             });
         }        
 
@@ -440,7 +454,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "RFID code " + rfidCode + " does not exist in database"
+                message = "[" + rfidCode + "] " + Common.TAG_NOT_EXIST
             });
         }
 
@@ -448,7 +462,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " not production scanned"
+                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_NOT_PRODUCTION
             });
         }
 
@@ -458,7 +472,7 @@ public class UHFController : ControllerBase
 
             return NotFound(new
             {
-                message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " not stocoked in warehouse yet"
+                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_NOT_IN_WAREHOSUE
             });                
         }
 
@@ -466,20 +480,20 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "RFID code " + sampleBarcode.rfid_code + sampleBarcode.dem_mk + " already stocoked out warehouse"
+                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_OUT_WAREHOUSE
             });
         }
 
         string demMk = "0000";
         string inoutMk = "B";
 
-        var writeEpc = await connection.Service.WriteSingleEPC(sampleBarcode.rfid_code + demMk);
+        var writeEpc = await UhfService.WriteSingleEPC(sampleBarcode.rfid_code + demMk);
 
         if (!writeEpc)
         {
             return NotFound(new
             {
-                message = "Failed to write EPC code"
+                message = Common.TAG_WRITE_FAILED
             });
         }
 
@@ -487,19 +501,19 @@ public class UHFController : ControllerBase
 
         if (!updateResult)
         {
-            var rollbackEpc = await connection.Service.WriteSingleEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
+            var rollbackEpc = await UhfService.WriteSingleEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
 
             if (!rollbackEpc)
             {
                 return NotFound(new
                 {
-                    message = "Failed to rollback EPC code"
+                    message = Common.TAG_ROLLBACK_FAILED
                 });
             }
 
             return NotFound(new
             {
-                message = "Failed to update sample barcode inout_mk"
+                message = Common.UPDATE_INOUT_FAILED
             });
         }
 
@@ -509,14 +523,14 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "RFID code " + rfidCode + " does not exist in database"
+                message = "[" + rfidCode + "] " + Common.TAG_NOT_EXIST
             });
         }
 
         return new JsonResult(new
         {
             result,
-            status = "success"
+            status = Common.SUCCESS
         });
     }
 
@@ -529,7 +543,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Connection not found"
+                message = ConnectionStatus.CONNECTION_NOT_FOUND
             });
         }
 
@@ -538,7 +552,7 @@ public class UHFController : ControllerBase
         return new JsonResult(new
         {
             result,
-            status = result ? "Start read inventory" : "Failed to start read inventory"
+            status = result ? Common.START_READ_TAG : Common.START_READ_FAILED
         });
     }
 
@@ -551,7 +565,7 @@ public class UHFController : ControllerBase
         {
             return NotFound(new
             {
-                message = "Connection not found"
+                message = ConnectionStatus.CONNECTION_NOT_FOUND
             });
         }
 
@@ -560,7 +574,7 @@ public class UHFController : ControllerBase
         return new JsonResult(new
         {
             result,
-            status = result ? "Stop read inventory" : "Failed to stop read inventory"
+            status = result ? Common.STOP_READ_TAG : Common.STOP_READ_FAILED
         });
     }
 }

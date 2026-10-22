@@ -1,4 +1,8 @@
-public class RFIDConnection
+using RFIDAPI.Services;
+
+namespace RFIDAPI.Models;
+
+public class RfidConnection
 {
     public string ConnectionId { get; set; } = string.Empty;
 
@@ -12,5 +16,5 @@ public class RFIDConnection
 
     public DateTime LastActivity { get; set; }
 
-    public UHFService Service { get; set; } = null!;
+    public UhfService Service { get; set; } = null!;
 }

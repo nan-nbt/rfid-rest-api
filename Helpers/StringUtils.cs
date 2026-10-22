@@ -1,28 +1,20 @@
-using System.Text.RegularExpressions;
+namespace RFIDAPI.Helpers;
 
-public class StringUtils
+public static class StringUtils
 {
-    /**
-     * 判斷是否是十六進制
-     *
-     * @param str
-     * @return
-     */
-    public static bool IsHexNumber(string str)
+    public static bool IsHexNumber(string? value)
     {
-        if (string.IsNullOrEmpty(str))
+        if (string.IsNullOrWhiteSpace(value))
         {
             return false;
         }
-        str = str.Trim();
-        if (str.Length == 0 || (str.Length % 2 != 0))
+
+        var normalized = value.Trim();
+        if (normalized.Length == 0 || normalized.Length % 2 != 0)
         {
             return false;
         }
-        if (Regex.IsMatch(str, "^[0-9A-Fa-f]+$"))
-        {
-            return true;
-        }
-        return false;
+
+        return normalized.All(Uri.IsHexDigit);
     }
 }

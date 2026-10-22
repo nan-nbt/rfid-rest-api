@@ -1,7 +1,10 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using RFIDAPI.Models;
 
-public class UHFAPI
+namespace RFIDAPI.Helpers;
+
+public static class UhfApi
 {
     [DllImport("UHFAPI.dll", CallingConvention = CallingConvention.Cdecl)]
     private extern static int TCPConnect(StringBuilder ip, uint hostport);
@@ -19,21 +22,21 @@ public class UHFAPI
     private extern static void TCPDisconnect();
 
     [DllImport("UHFAPI.dll", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int UHFWriteData(byte[] uAccessPwd, byte FilterBank, int FilterStartaddr, int FilterLen, byte[] FilterData, byte uBank, int uPtr, byte uCnt, byte[] uDatabuf);
+    private static extern int UHFWriteData(byte[] uAccessPwd, byte FilterBank, int FilterStartaddr, int FilterLen, byte[]? FilterData, byte uBank, int uPtr, byte uCnt, byte[] uDatabuf);
 
     [DllImport("UHFAPI.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern int UHFReadData(byte[] uAccessPwd,
      byte FilterBank,
      int FilterStartaddr,
      int FilterLen,
-     byte[] FilterData,
+     byte[]? FilterData,
      byte uBank,
      int uPtr,
      int uCnt,
      byte[] uReadDatabuf,
      ref int uReadDataLen);
 
-    public bool TcpConnect(string ip, uint port)
+    public static bool TcpConnect(string ip, uint port)
     {
         StringBuilder bIp = new StringBuilder();
         bIp.Append(ip);
@@ -45,7 +48,7 @@ public class UHFAPI
         return false;
     }
 
-    public bool StartInventory()
+    public static bool StartInventory()
     {
         int result = UHFInventory();
         if (result == 0)
@@ -54,7 +57,7 @@ public class UHFAPI
             return false;
     }
 
-    public bool StopInventory()
+    public static bool StopInventory()
     {
         if (UHFStopGet() == 0)
             return true;
@@ -62,7 +65,7 @@ public class UHFAPI
             return false;
     }
 
-    public bool ReadTagFromBuffer(ref int len, ref byte[] data)
+    public static bool ReadTagFromBuffer(ref int len, ref byte[] data)
     {
         if (UHF_GetReceived_EX(ref len, data) == 0)
         {
@@ -71,14 +74,13 @@ public class UHFAPI
         return false;
     }
 
-    public UHFTAGInfo ReadTagFromBuffer()
+    public static UhfTagInfo? ReadTagFromBuffer()
     {
         int uLen = 0;
         byte[] bufData = new byte[256];
         if (ReadTagFromBuffer(ref uLen, ref bufData))
         {
             string epc_data = string.Empty;
-            string uii_data = string.Empty;//uii數據
             string tid_data = string.Empty; //tid數據
             string rssi_data = string.Empty;
             string ant_data = string.Empty;
@@ -116,7 +118,7 @@ public class UHFAPI
             }
             ant_data = Convert.ToInt32((strData.Substring(ant_index * 2, 2)), 16).ToString();
 
-            UHFTAGInfo info = new UHFTAGInfo();
+            UhfTagInfo info = new UhfTagInfo();
             info.Epc = epc_data;
             info.Tid = tid_data;
             info.Rssi = rssi_data;
@@ -131,12 +133,12 @@ public class UHFAPI
         }
     }
 
-    public void TcpDisconnect()
+    public static void TcpDisconnect()
     {
         TCPDisconnect();
     }
 
-    public bool WriteData(byte[] uAccessPwd, byte FilterBank, int FilterStartaddr, int FilterLen, byte[] FilterData, byte uBank, int uPtr, byte uCnt, byte[] uDatabuf)
+    public static bool WriteData(byte[] uAccessPwd, byte FilterBank, int FilterStartaddr, int FilterLen, byte[]? FilterData, byte uBank, int uPtr, byte uCnt, byte[] uDatabuf)
     {
         if (UHFWriteData(uAccessPwd, FilterBank, FilterStartaddr, FilterLen, FilterData, uBank, uPtr, uCnt, uDatabuf) == 0)
         {
@@ -145,11 +147,11 @@ public class UHFAPI
         return false;
     }
 
-    public string ReadData(byte[] uAccessPwd, byte FilterBank, int FilterStartaddr, int FilterLen, byte[] FilterData, byte uBank, int uPtr, int uCnt)
+    public static string ReadData(byte[] uAccessPwd, byte FilterBank, int FilterStartaddr, int FilterLen, byte[]? FilterData, byte uBank, int uPtr, int uCnt)
     {
         try
         {
-            byte[] uReadDatabuf = new byte[2048]; ;
+            byte[] uReadDatabuf = new byte[2048];
             int uReadDataLen = 0;
 
             int result = UHFReadData(uAccessPwd, FilterBank, FilterStartaddr, FilterLen, FilterData, uBank, uPtr, uCnt, uReadDatabuf, ref uReadDataLen);
@@ -158,9 +160,10 @@ public class UHFAPI
                 return DataConvert.ByteArrayToHexString(uReadDatabuf, uReadDataLen);
             }
         }
-        catch (Exception ex)
+        catch (DllNotFoundException)
         {
-
+            // The native reader library is optional on development machines.
+            return string.Empty;
         }
 
         return string.Empty;

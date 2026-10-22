@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using RFIDAPI.Models;
+
+namespace RFIDAPI.Configurations;
 
 public class AppDbContext : DbContext
 {
@@ -7,5 +10,5 @@ public class AppDbContext : DbContext
     {
     }
 
-    public DbSet<SampleBarcode> SampleBarcodes { get; set; }
+    public DbSet<SampleBarcode> SampleBarcodes { get; set; } = null!;
 }

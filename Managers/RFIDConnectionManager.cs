@@ -1,11 +1,14 @@
 using System.Collections.Concurrent;
+using RFIDAPI.Models;
 
-public class RFIDConnectionManager
+namespace RFIDAPI.Managers;
+
+public class RfidConnectionManager
 {
-    private readonly ConcurrentDictionary<string, RFIDConnection> _connections
-        = new ConcurrentDictionary<string, RFIDConnection>();
+    private readonly ConcurrentDictionary<string, RfidConnection> _connections
+        = new ConcurrentDictionary<string, RfidConnection>();
 
-    public bool AddConnection(RFIDConnection connection)
+    public bool AddConnection(RfidConnection connection)
     {
         return _connections.TryAdd(connection.ConnectionId, connection);
     }
@@ -15,7 +18,7 @@ public class RFIDConnectionManager
         return _connections.TryRemove(connectionId, out _);
     }
 
-    public RFIDConnection? GetConnection(string connectionId)
+    public RfidConnection? GetConnection(string connectionId)
     {
         _connections.TryGetValue(connectionId, out var connection);
 

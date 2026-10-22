@@ -1,20 +1,23 @@
 using Microsoft.EntityFrameworkCore;
+using RFIDAPI.Configurations;
+using RFIDAPI.Helpers;
+using RFIDAPI.Models;
 
-public class UHFService
+namespace RFIDAPI.Services;
+
+public class UhfService
 {
     private readonly IDbContextFactory<AppDbContext> _factory;
-    private bool isConnected = false;
-    private bool isInventory = false;
-    private List<UHFTAGInfo> tagList = new List<UHFTAGInfo>();
-    private UHFAPI uhf;
+    private bool _isConnected;
+    private bool _isInventory;
+    private readonly List<UhfTagInfo> _tagList = [];
 
     /*
      * Constructor
      */
-    public UHFService(IDbContextFactory<AppDbContext> factory)
+    public UhfService(IDbContextFactory<AppDbContext> factory)
     {
         _factory = factory;
-        uhf = new UHFAPI();
     }
 
     /*
@@ -23,10 +26,10 @@ public class UHFService
      */
     public bool Connect(string ip, uint port)
     {
-        var connect = uhf.TcpConnect(ip, port);
+        var connect = UhfApi.TcpConnect(ip, port);
         if (connect)
         {
-            isConnected = true;
+            _isConnected = true;
             return true;
         }
 
@@ -35,11 +38,11 @@ public class UHFService
 
     public bool Disconnect(string ip, uint port)
     {
-        if (isConnected)
+        if (_isConnected)
         {
-            uhf.TcpDisconnect();
+            UhfApi.TcpDisconnect();
 
-            isConnected = false;
+            _isConnected = false;
 
             return true;
         }
@@ -49,10 +52,10 @@ public class UHFService
 
     public bool StartReadInventory()
     {
-        var inventory = uhf.StartInventory();
+        var inventory = UhfApi.StartInventory();
         if (inventory)
         {
-            isInventory = true;
+            _isInventory = true;
             return true;
         }
 
@@ -61,11 +64,11 @@ public class UHFService
 
     public bool StopReadInventory()
     {
-        if (isInventory)
+        if (_isInventory)
         {
-            uhf.StopInventory();
+            UhfApi.StopInventory();
 
-            isInventory = false;
+            _isInventory = false;
 
             return true;
         }
@@ -73,99 +76,95 @@ public class UHFService
         return false;
     }
 
-    public async Task<List<UHFTAGInfo>> GetListEPC()
+    public async Task<List<UhfTagInfo>> GetListEPC()
     {
         var start = Environment.TickCount;
 
         while (Environment.TickCount - start < 500)
         {
-            var info = uhf.ReadTagFromBuffer();
+            var info = UhfApi.ReadTagFromBuffer();
 
-            if (info != null && !tagList.Any(t => t.Epc == info.Epc))
+            if (info is not null && !_tagList.Any(tag => tag.Epc == info.Epc))
             {
-                tagList.Add(info);
+                _tagList.Add(info);
             }
 
-            Thread.Sleep(10);
+            await Task.Delay(10);
         }
 
-        return tagList;
+        return _tagList;
     }
 
-    public async Task<string> ReadSingleEPC()
+    public static Task<string> ReadSingleEPC()
     {
         string filterData = "";
-        string accessPwd = "00000000";
+        const string tagAccessCode = "00000000";
 
         int filterBank = 1;
-        byte[] filterBuff = DataConvert.HexStringToByteArray(filterData);
+        byte[]? filterBuff = string.IsNullOrEmpty(filterData)
+            ? null
+            : DataConvert.HexStringToByteArray(filterData);
         int filterPtr = 32;
         int filterLen = 0;
 
-        byte[] pwd = DataConvert.HexStringToByteArray(accessPwd);
+        byte[] accessCodeBytes = DataConvert.HexStringToByteArray(tagAccessCode);
         int bank = 1;
         int Ptr = 2;
         int leng = 6;
 
-        string result = uhf.ReadData(pwd, (byte)filterBank, filterPtr, filterLen, filterBuff, (byte)bank, Ptr, leng);
+        string result = UhfApi.ReadData(accessCodeBytes, (byte)filterBank, filterPtr, filterLen, filterBuff, (byte)bank, Ptr, leng);
         if (result != string.Empty)
         {
-            return result;
+            return Task.FromResult(result);
         }
 
-        return string.Empty;
+        return Task.FromResult(string.Empty);
     }
 
-    public async Task<bool> WriteSingleEPC(string epc)
+    public static Task<bool> WriteSingleEPC(string epc)
     {
         string wdata = epc;
         string filterData = "";
-        string accessPwd = "00000000";
+        const string tagAccessCode = "00000000";
 
         int filterBank = 1;
-        byte[] filterBuff = DataConvert.HexStringToByteArray(filterData);
+        byte[]? filterBuff = string.IsNullOrEmpty(filterData)
+            ? null
+            : DataConvert.HexStringToByteArray(filterData);
         int filterPtr = 32;
         int filterLen = 0;
 
-        byte[] pwd = DataConvert.HexStringToByteArray(accessPwd);
+        byte[] accessCodeBytes = DataConvert.HexStringToByteArray(tagAccessCode);
         int bank = 1;
         int Ptr = 2;
         int leng = 6;
         byte[] uDatabuf = DataConvert.HexStringToByteArray(wdata);
 
-        var result = uhf.WriteData(pwd, (byte)filterBank, filterPtr, filterLen, filterBuff, (byte)bank, Ptr, (byte)leng, uDatabuf);
-        if (result)
-        {
-            return true;
-        }
-
-        return false;
+        var result = UhfApi.WriteData(accessCodeBytes, (byte)filterBank, filterPtr, filterLen, filterBuff, (byte)bank, Ptr, (byte)leng, uDatabuf);
+        return Task.FromResult(result);
     }
 
-    public async Task<bool> WriteMaskEPC(string epc, string mask)
+    public static Task<bool> WriteMaskEPC(string epc, string mask)
     {
         string wdata = epc;
         string filterData = mask;
-        string accessPwd = "00000000";
+        const string tagAccessCode = "00000000";
 
         int filterBank = 1;
-        byte[] filterBuff = DataConvert.HexStringToByteArray(filterData);
+        byte[]? filterBuff = string.IsNullOrEmpty(filterData)
+            ? null
+            : DataConvert.HexStringToByteArray(filterData);
         int filterPtr = 32;
         int filterLen = 0;
 
-        byte[] pwd = DataConvert.HexStringToByteArray(accessPwd);
+        byte[] accessCodeBytes = DataConvert.HexStringToByteArray(tagAccessCode);
         int bank = 1;
         int Ptr = 2;
         int leng = 6;
         byte[] uDatabuf = DataConvert.HexStringToByteArray(wdata);
 
-        var result = uhf.WriteData(pwd, (byte)filterBank, filterPtr, filterLen, filterBuff, (byte)bank, Ptr, (byte)leng, uDatabuf);
-        if (result)
-        {
-            return true;
-        }
-
-        return false;
+        var result = UhfApi.WriteData(accessCodeBytes, (byte)filterBank, filterPtr, filterLen, filterBuff, (byte)bank, Ptr, (byte)leng, uDatabuf);
+        return Task.FromResult(result);
     }
 
     public async Task<SampleBarcode> FindBarcode(string barcode)
