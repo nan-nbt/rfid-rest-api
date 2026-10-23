@@ -101,6 +101,10 @@ public static class Program
             app.MapOpenApi();
         }
 
+        // Enable Static File
+        app.UseDefaultFiles();
+        app.UseStaticFiles();
+
         // Enable HTTPS
         app.UseHttpsRedirection();
 
