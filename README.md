@@ -78,21 +78,34 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
 ## Project Structure
 
 ```text
-rfidapi_test/
-|-- Configuarations/AppDbContext.cs
-|-- Constants/                   # API status and response constants
-|-- Controllers/UHFController.cs # RFID API endpoints
-|-- Helpers/                     # Conversion, validation, native API wrapper
-|-- Managers/RFIDConnectionManager.cs
-|-- Models/                      # RFID connection and sample barcode models
-|-- Services/UHFService.cs       # Reader operations and database workflows
-|-- libs/                        # Native and interop DLLs
-|-- Properties/launchSettings.json
-|-- appsettings*.json
-|-- Program.cs
-|-- RFIDAPI.csproj
-|-- RFIDAPI.http
-`-- UHFTAGInfo.cs
+rfid-rest-api/
+├── Configuarations/             # Entity Framework Core DbContext and PostgreSQL persistence configurations
+│   └── *.cs
+├── Constants/                   # Application constants, response messages, and connection status definitions
+│   └── *.cs
+├── Controllers/                 # ASP.NET Core API controllers exposing secured RFID endpoints
+│   └── *.cs
+├── Helpers/                     # Utility helpers (hex/byte conversions, string validation, native driver wrapper)
+│   └── *.cs
+├── libs/                        # Native 32-bit (x86) reader drivers and runtime DLL dependencies
+│   └── *.dll
+├── Managers/                    # In-memory session tracking and reader device exclusivity manager
+│   └── *.cs
+├── Models/                      # Domain entity models (sample_barcode) and session state definitions
+│   └── *.cs
+├── Properties/                  # Application launch profiles, environment variables, and port bindings
+│   └── launchSettings.json
+├── Services/                    # UHF reader communication services and transactional business workflows
+│   └── *.cs
+├── wwwroot/                     # Static web assets hosting the interactive API documentation and console
+│   └── index.html
+├── appsettings.*.json           # Environment configuration files (base, Debug, Release)
+├── Program.cs                   # Application entry point, dependency injection, and IAM JWT middleware
+├── rfid-icon.ico                # Application executable and console icon
+├── RFIDAPI.csproj               # Project build definition, NuGet packages, and x86 target configuration
+├── RFIDAPI.http                 # REST Client request collection with IAM OAuth 2.0 examples
+├── RFIDAPI.sln                  # Visual Studio solution file
+└── UHFTAGInfo.cs                # Tag telemetry data structure (PC, EPC, TID, RSSI, Ant)
 ```
 
 ## Requirements & Prerequisites
