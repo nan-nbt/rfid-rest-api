@@ -103,7 +103,8 @@
     .hero p {
       color: var(--muted);
       font-size: 1.05rem;
-      max-width: 650px
+      max-width: none;
+      white-space: nowrap
     }
 
     .layout {
@@ -379,7 +380,11 @@
       margin-top: 28px
     }
 
-    @media(max-width:800px) {
+    @media(max-width:1100px) {
+      .hero p {
+        white-space: normal
+      }
+
       .layout {
         grid-template-columns: 1fr
       }
@@ -446,6 +451,12 @@
       top: 0;
       background: #14232c;
       color: var(--mint)
+    }
+
+    .code-highlight {
+      color: #f4fff9;
+      font-weight: 750;
+      white-space: nowrap
     }
 
     tbody tr:last-child td {
@@ -534,19 +545,37 @@
     }
 
     .db-form select {
+      appearance: none;
+      -webkit-appearance: none;
       width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      background: #0f1b23;
+      border: 1px solid #3b5661;
+      border-radius: 10px;
+      background-color: #0f1b23;
+      background-image: linear-gradient(45deg, transparent 50%, var(--mint) 50%), linear-gradient(135deg, var(--mint) 50%, transparent 50%);
+      background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
       color: var(--text);
-      padding: 10px 12px;
+      padding: 11px 38px 11px 13px;
       min-width: 0;
-      outline: none
+      outline: none;
+      cursor: pointer;
+      transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease
+    }
+
+    .db-form select:hover {
+      border-color: #63828c;
+      background-color: #13232c
     }
 
     .db-form select:focus {
       border-color: var(--mint);
-      box-shadow: 0 0 0 3px #8ce0bc20
+      box-shadow: 0 0 0 3px #8ce0bc25
+    }
+
+    .db-form select option {
+      background: #14232c;
+      color: var(--text)
     }
   </style>
 </head>
@@ -560,13 +589,13 @@
     <section class="hero">
       <div class="eyebrow">Device operations | Manufacturing | Warehouse</div>
       <h1>Enterprise RFID Integration Platform</h1>
-      <p>Explore the RFIDAPI endpoints and send requests to this server. Connect a reader first, then use its connection
-        ID for tag operations and workflows.</p>
+      <p>Explore the RFIDAPI endpoints and send requests to this server. Connect a reader first, then use its
+        connection ID for tag operations and workflows.</p>
     </section>
     <section class="card auth">
       <h2>Request Setup</h2>
       <p class="muted">All endpoints require a valid bearer token from IAM or Keycloak with the
-        <code>default-roles-service</code> role.</p>
+        <code class="code-highlight">rfid-client-service</code> role.</p>
       <div class="fields">
         <div class="field full"><label for="token">Bearer access token</label><input id="token" type="password"
             autocomplete="off" placeholder="Paste access token (without 'Bearer ')"><span class="hint">The token stays
@@ -579,13 +608,13 @@
     <div class="layout">
       <div>
         <section class="card">
-          <h2>RFID Main Methods</h2>
+          <h2>Main Methods</h2>
           <p class="muted">Reader connection and direct tag operations. POST operations use query parameters.</p>
           <div class="endpoint-list" id="main-endpoints"></div>
         </section>
         <section class="card notes">
-          <h2>RFID Custom Methods</h2>
-          <p class="muted">Production and warehouse workflows update the sample barcode record after a successful tag
+          <h2>Custom Methods</h2>
+          <p class="muted">Production and warehouse workflows update the <code class="code-highlight">sample_barcode</code> record after a successful tag
             operation.</p>
           <div class="endpoint-list" id="custom-endpoints"></div>
         </section>
@@ -605,22 +634,10 @@
           </dl>
         </section>
         <section class="card notes">
-          <h3>Prerequisites</h3>
-          <ul>
-            <li>Get a client credentials token from your IAM provider. The app validates its issuer, audience, expiry,
-              and required role.</li>
-            <li>Connect to a reachable reader IP address and port. Each client and reader can have only one active
-              connection.</li>
-            <li>Write expects a 24-character EPC. Production and warehouse actions write physical tags and update
-              <code>sample_barcode</code> in PostgreSQL.</li>
-            <li>Disconnect when you are finished. Reader sessions are stored in this server instance's memory.</li>
-          </ul><span class="pill">Windows x86 reader libraries</span> <span class="pill">PostgreSQL workflows</span>
-        </section>
-        <section class="card notes">
           <div class="result-head">
             <h3>Database</h3><span class="status" id="table-status">Loading...</span>
           </div>
-          <p class="muted">Live view of the <code>sample_barcode</code> database. Refreshes every three seconds.</p>
+          <p class="muted">Realtime of the <code class="code-highlight">sample_barcode</code> database table. Refreshes every three seconds.</p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -641,6 +658,18 @@
             </table>
           </div>
         </section>
+        <section class="card notes">
+          <h3>Prerequisites</h3>
+          <ul>
+            <li>Get a client credentials token from your IAM provider. The app validates its issuer, audience, expiry,
+              and required role.</li>
+            <li>Connect to a reachable reader IP address and port. Each client and reader can have only one active
+              connection.</li>
+            <li>Write expects a 24-character EPC. Production and warehouse actions write physical tags and update
+              <code class="code-highlight">sample_barcode</code> in PostgreSQL.</li>
+            <li>Disconnect when you are finished. Reader sessions are stored in this server instance's memory.</li>
+          </ul><span class="pill">Windows x86 reader libraries</span> <span class="pill">PostgreSQL workflows</span>
+        </section>
       </aside>
     </div>
     <template id="row-actions-template"><span class="row-actions"><button type="button"
@@ -649,7 +678,7 @@
     <template id="management-template">
       <section class="card db-management">
         <h2>Database Management</h2>
-        <p class="muted">Create, update, or delete <code>sample_barcode</code> records. The table is limited to two
+        <p class="muted">Create, update, or delete <code class="code-highlight">sample_barcode</code> records. The table is limited to two
           records.</p>
         <form id="sample-form" class="db-form"><input id="sample-id" type="hidden">
           <div class="fields">
@@ -738,7 +767,6 @@
     function renderManagementRows(rows) { const body = document.querySelector('#management-rows'); body.replaceChildren(); if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="muted">No records found.</td></tr>'; return } for (const row of rows) { const tr = document.createElement('tr'); for (const value of [row.id, row.barcode, row.rfid_code, row.dem_mk, row.prod_mk, row.inout_mk ?? '']) { const td = document.createElement('td'); td.textContent = value ?? ''; tr.append(td) } const actionCell = document.createElement('td'); const actions = document.querySelector('#row-actions-template').content.cloneNode(true); actions.querySelector('.edit-action').addEventListener('click', () => { document.querySelector('#sample-id').value = row.id; document.querySelector('#sample-barcode').value = row.barcode; document.querySelector('#sample-rfid').value = row.rfid_code; document.querySelector('#sample-dem').value = row.dem_mk; document.querySelector('#sample-prod').value = row.prod_mk; document.querySelector('#sample-inout').value = row.inout_mk ?? ''; document.querySelector('#sample-cancel').hidden = false; document.querySelector('#sample-message').textContent = `Editing record ${row.id}.`; sampleForm.scrollIntoView({ behavior: 'smooth', block: 'center' }) }); actions.querySelector('.delete-action').addEventListener('click', async () => { if (!window.confirm(`Delete sample barcode record ${row.id}?`)) return; const token = document.querySelector('#token').value.trim(), base = document.querySelector('#base').value.trim().replace(/\/+$/, ''); try { const res = await fetch(`${base}/api/uhf/sample-barcode/${row.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }); if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`); await loadBarcodeRows() } catch (error) { sampleMessage.textContent = `Delete failed: ${error.message}` } }); actionCell.append(actions); tr.append(actionCell); body.append(tr) } }
     function addCardToggles() { document.querySelectorAll('.card').forEach(card => { const heading = card.querySelector(':scope > h2, :scope > h3, :scope > .result-head'); if (!heading) return; const content = document.createElement('div'); content.className = 'card-content'; while (heading.nextSibling) content.append(heading.nextSibling); const isResult = heading.classList.contains('result-head'); const title = isResult ? heading.querySelector('h2,h3') : heading; const row = document.createElement('div'); row.className = 'card-heading'; heading.replaceWith(row); row.append(title); if (isResult) { const status = heading.querySelector('.status'); if (status) row.append(status) } const button = document.createElement('button'); button.type = 'button'; button.className = 'toggle-card'; button.setAttribute('aria-expanded', 'true'); button.setAttribute('aria-label', `Toggle ${title.textContent.trim()}`); button.addEventListener('click', () => { const expanded = button.getAttribute('aria-expanded') === 'true'; content.hidden = expanded; button.setAttribute('aria-expanded', String(!expanded)) }); row.append(button); card.append(content) }) }
     addCardToggles();
-    const infoCards = [...document.querySelectorAll('aside > .card')]; const databaseCard = infoCards.find(card => card.textContent.includes('Database')); const prerequisitesCard = infoCards.find(card => card.textContent.includes('Prerequisites')); if (databaseCard && prerequisitesCard) prerequisitesCard.before(databaseCard);
     loadBarcodeRows(); setInterval(loadBarcodeRows, 3000);
   </script>
 </body>
