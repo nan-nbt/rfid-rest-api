@@ -24,6 +24,7 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
   - [Production Scan](#7-production-scan)
   - [Warehouse Stock In](#8-warehouse-stock-in)
   - [Warehouse Stock Out](#9-warehouse-stock-out)
+- [Database Management Methods](#database-management-methods)
 - [Connection Management & Concurrency](#connection-management--concurrency)
 - [HTTP Testing](#http-testing)
 
@@ -50,6 +51,7 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
 - **Database & Persistence**:
   - Entity Framework Core with PostgreSQL provider (`IDbContextFactory<AppDbContext>`).
   - Sample barcode entity mapping (`sample_barcode` table).
+  - Authenticated list, create, update, and delete operations for sample barcode records. The API limits the table to two records when creating through the management route.
 
 ---
 
@@ -78,7 +80,7 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
 ## Project Structure
 
 ```text
-rfid-rest-api/
+rfidapi_test/
 ├── Configuarations/             # Entity Framework Core DbContext and PostgreSQL persistence configurations
 │   └── *.cs
 ├── Constants/                   # Application constants, response messages, and connection status definitions
@@ -145,6 +147,8 @@ CREATE TABLE sample_barcode (
 ```
 
 The SQL types and nullability above reflect the current C# model and PostgreSQL provider conventions. The example does not specify uniqueness, indexes, or maximum string lengths because these are not defined in the project model. If your deployment schema specifies them, retain those definitions.
+
+For databases using a PostgreSQL `serial` column, ensure its sequence is synchronized with the largest existing `id` after importing or inserting records with explicit IDs. Otherwise, the next generated ID may conflict with an existing primary key.
 
 ---
 
@@ -530,6 +534,29 @@ Handles warehouse inventory dispatch of a previously stocked-in item.
 ```
 
 ---
+
+## Database Management Methods
+
+The interactive console includes a **Database Management** card for creating, editing, and deleting `sample_barcode` records. The displayed database table refreshes every three seconds. The create API rejects additional records once the table contains two rows; edits and deletes remain available.
+
+The console validates its form inputs before sending requests:
+
+- `barcode` is required; leading and trailing spaces are removed.
+- `rfid_code` must contain exactly 20 hexadecimal characters.
+- `dem_mk` must contain exactly four binary digits (`0` or `1`).
+- `prod_mk` must be `Y` (produced) or `N` (not produced).
+- `inout_mk` may be empty, `A` (in stock), or `B` (out of stock).
+
+The endpoints are secured by the same bearer token and role as the RFID endpoints:
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/api/uhf/sample-barcode` | List all records, ordered by `id`. |
+| `POST` | `/api/uhf/sample-barcode` | Create a record. Returns `409 Conflict` when two records already exist. |
+| `PUT` | `/api/uhf/sample-barcode/{id}` | Update a record by ID. |
+| `DELETE` | `/api/uhf/sample-barcode/{id}` | Delete a record by ID. |
+
+The create and update request bodies use the `SampleBarcode` JSON shape. Include the required `id` property because it is marked with `JsonRequired`; the console sends `0` for a new record, and PostgreSQL generates its actual ID. For updates, the route ID selects the record to update.
 
 ## Connection Management & Concurrency
 

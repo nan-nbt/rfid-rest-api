@@ -17,7 +17,7 @@ namespace RFIDAPI.Controllers;
  * - Client Custom Role: rfid-client-service
  */
 [ApiController]
-[Route("api/UHF")]
+[Route("api/uhf")]
 [Authorize(Roles = "rfid-client-service")]
 public class UhfController : ControllerBase
 {
@@ -36,7 +36,7 @@ public class UhfController : ControllerBase
 
     /**
      * RFID main method
-     * @return {Connect, Disconnect, Read, Write}
+     * @function {connect, disconnect, read, write, start-read, stop-read}
      */
     [HttpGet("connect")]
     public IActionResult Connect([FromQuery] string ip, [FromQuery] uint port)
@@ -213,9 +213,53 @@ public class UhfController : ControllerBase
         });
     }
 
+    [HttpGet("start-read")]
+    public IActionResult StartRead([FromQuery] string connectionId)
+    {
+        var connection = _connectionManager.GetConnection(connectionId);
+        
+        if (connection == null)
+        {
+            return NotFound(new
+            {
+                message = ConnectionStatus.CONNECTION_NOT_FOUND
+            });
+        }
+
+        var result = connection.Service.StartReadInventory();
+
+        return new JsonResult(new
+        {
+            result,
+            status = result ? Common.START_READ_TAG : Common.START_READ_FAILED
+        });
+    }
+
+    [HttpGet("stop-read")]
+    public IActionResult StopRead([FromQuery] string connectionId)
+    {
+        var connection = _connectionManager.GetConnection(connectionId);
+
+        if (connection == null)
+        {
+            return NotFound(new
+            {
+                message = ConnectionStatus.CONNECTION_NOT_FOUND
+            });
+        }
+
+        var result = connection.Service.StopReadInventory();
+
+        return new JsonResult(new
+        {
+            result,
+            status = result ? Common.STOP_READ_TAG : Common.STOP_READ_FAILED
+        });
+    }
+
     /**
      * RFID custom method
-     * @function {ProductionScan, WarehouseInOut}
+     * @function {production-scan, warehouse-stock-in, warehouse-stock-out}
      */
     [HttpPost("production-scan")]
     public async Task<IActionResult> ProductionScan([FromQuery] string connectionId, [FromQuery] string barcode)
@@ -534,47 +578,93 @@ public class UhfController : ControllerBase
         });
     }
 
-    [HttpGet("start-read")]
-    public IActionResult StartRead([FromQuery] string connectionId)
+    /**
+     * database management method
+     * @function {CRUD}
+     */
+    [HttpGet("sample-barcode")]
+    public async Task<IActionResult> GetSampleBarcodes()
     {
-        var connection = _connectionManager.GetConnection(connectionId);
-        
-        if (connection == null)
-        {
-            return NotFound(new
-            {
-                message = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
-        }
+        await using var db = await _factory.CreateDbContextAsync();
+        var rows = await db.SampleBarcodes
+            .AsNoTracking()
+            .OrderBy(x => x.id)
+            .ToListAsync();
 
-        var result = connection.Service.StartReadInventory();
-
-        return new JsonResult(new
-        {
-            result,
-            status = result ? Common.START_READ_TAG : Common.START_READ_FAILED
-        });
+        return new JsonResult(rows);
     }
 
-    [HttpGet("stop-read")]
-    public IActionResult StopRead([FromQuery] string connectionId)
+    [HttpPost("sample-barcode")]
+    public async Task<IActionResult> CreateSampleBarcode([FromBody] SampleBarcode sampleBarcode)
     {
-        var connection = _connectionManager.GetConnection(connectionId);
-
-        if (connection == null)
+        if (string.IsNullOrWhiteSpace(sampleBarcode.barcode) ||
+            string.IsNullOrWhiteSpace(sampleBarcode.rfid_code) ||
+            string.IsNullOrWhiteSpace(sampleBarcode.dem_mk) ||
+            string.IsNullOrWhiteSpace(sampleBarcode.prod_mk))
         {
-            return NotFound(new
-            {
-                message = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
+            return BadRequest(new { message = "Barcode, RFID code, DEM mark, and production mark are required." });
         }
 
-        var result = connection.Service.StopReadInventory();
-
-        return new JsonResult(new
+        await using var db = await _factory.CreateDbContextAsync();
+        if (await db.SampleBarcodes.CountAsync() >= 2)
         {
-            result,
-            status = result ? Common.STOP_READ_TAG : Common.STOP_READ_FAILED
-        });
+            return Conflict(new { message = "The sample_barcode table is limited to two records." });
+        }
+
+        var created = new SampleBarcode
+        {
+            barcode = sampleBarcode.barcode.Trim(),
+            rfid_code = sampleBarcode.rfid_code.Trim(),
+            dem_mk = sampleBarcode.dem_mk.Trim(),
+            prod_mk = sampleBarcode.prod_mk.Trim(),
+            inout_mk = sampleBarcode.inout_mk?.Trim()
+        };
+        db.SampleBarcodes.Add(created);
+        await db.SaveChangesAsync();
+
+        return new JsonResult(created) { StatusCode = StatusCodes.Status201Created };
+    }
+
+    [HttpPut("sample-barcode/{id:int}")]
+    public async Task<IActionResult> UpdateSampleBarcode(int id, [FromBody] SampleBarcode sampleBarcode)
+    {
+        if (string.IsNullOrWhiteSpace(sampleBarcode.barcode) ||
+            string.IsNullOrWhiteSpace(sampleBarcode.rfid_code) ||
+            string.IsNullOrWhiteSpace(sampleBarcode.dem_mk) ||
+            string.IsNullOrWhiteSpace(sampleBarcode.prod_mk))
+        {
+            return BadRequest(new { message = "Barcode, RFID code, DEM mark, and production mark are required." });
+        }
+
+        await using var db = await _factory.CreateDbContextAsync();
+        var existing = await db.SampleBarcodes.FirstOrDefaultAsync(x => x.id == id);
+        if (existing == null)
+        {
+            return NotFound(new { message = $"Sample barcode record {id} was not found." });
+        }
+
+        existing.barcode = sampleBarcode.barcode.Trim();
+        existing.rfid_code = sampleBarcode.rfid_code.Trim();
+        existing.dem_mk = sampleBarcode.dem_mk.Trim();
+        existing.prod_mk = sampleBarcode.prod_mk.Trim();
+        existing.inout_mk = sampleBarcode.inout_mk?.Trim();
+        await db.SaveChangesAsync();
+
+        return new JsonResult(existing);
+    }
+
+    [HttpDelete("sample-barcode/{id:int}")]
+    public async Task<IActionResult> DeleteSampleBarcode(int id)
+    {
+        await using var db = await _factory.CreateDbContextAsync();
+        var existing = await db.SampleBarcodes.FirstOrDefaultAsync(x => x.id == id);
+        if (existing == null)
+        {
+            return NotFound(new { message = $"Sample barcode record {id} was not found." });
+        }
+
+        db.SampleBarcodes.Remove(existing);
+        await db.SaveChangesAsync();
+        return NoContent();
     }
 }

@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace RFIDAPI.Models;
 
 [Table("sample_barcode")]
 public class SampleBarcode
 {
+    [JsonRequired]
     public int id { get; set; }
 
     public string barcode { get; set; } = string.Empty;
