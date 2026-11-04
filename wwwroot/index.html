@@ -624,8 +624,7 @@
           <div class="result-head">
             <h2>Response</h2><span class="status" id="status">Ready</span>
           </div>
-          <div class="response" id="response">Choose an endpoint and run a request. The HTTP status, duration, and
-            response body will appear here.</div>
+          <div class="response" id="response">Choose an endpoint and run a request. The HTTP status, duration, and response body will appear here.</div>
           <dl class="meta">
             <dt>Request</dt>
             <dd id="requestMeta"> - </dd>
@@ -637,7 +636,7 @@
           <div class="result-head">
             <h3>Database</h3><span class="status" id="table-status">Loading...</span>
           </div>
-          <p class="muted">Realtime of the <code class="code-highlight">sample_barcode</code> database table. Refreshes every three seconds.</p>
+          <p class="muted">Realtime of the <code class="code-highlight">sample_barcode</code> database table automatic refreshes every 5 seconds.</p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -683,14 +682,14 @@
         <form id="sample-form" class="db-form"><input id="sample-id" type="hidden">
           <div class="fields">
             <div class="field"><label for="sample-barcode">Barcode</label><input id="sample-barcode" required
-                autocomplete="off" aria-describedby="barcode-hint"><span class="hint" id="barcode-hint">Enter a barcode.
+                autocomplete="off" placeholder="CFM258999L" aria-describedby="barcode-hint"><span class="hint" id="barcode-hint">Enter a barcode.
                 Leading and trailing spaces are removed.</span></div>
             <div class="field"><label for="sample-rfid">RFID Code</label><input id="sample-rfid" required
-                inputmode="text" minlength="20" maxlength="20" pattern="[0-9A-Fa-f]{20}"
+                inputmode="text" minlength="20" maxlength="20" pattern="[0-9A-Fa-f]{20}" placeholder="20-digit hexadecimal code"
                 title="Enter exactly 20 hexadecimal characters" aria-describedby="rfid-hint"><span class="hint"
                 id="rfid-hint">Enter exactly 20 hexadecimal characters.</span></div>
             <div class="field"><label for="sample-dem">DEM Mark</label><input id="sample-dem" required inputmode="text"
-                minlength="4" maxlength="4" pattern="[01]{4}" title="Enter exactly four digits, using only 0 and 1"
+                minlength="4" maxlength="4" pattern="[01]{4}" placeholder="0000" title="Enter exactly four digits, using only 0 and 1"
                 aria-describedby="dem-hint"><span class="hint" id="dem-hint">Enter exactly 4 digits binary
                 characters.</span></div>
             <div class="field"><label for="sample-prod">Production Mark</label><select id="sample-prod" required
@@ -756,18 +755,95 @@
       const actions = document.createElement('div'); actions.className = 'ep-actions'; const button = document.createElement('button'); button.className = 'run'; button.textContent = 'Send request'; button.addEventListener('click', () => send(ep, details, button)); actions.append(button); body.append(actions); details.append(summary, body); endpointRoot.append(details)
     }
     document.querySelector('#custom-endpoints').closest('.card').after(document.querySelector('#management-template').content.cloneNode(true));
+    const tokenInput = document.querySelector('#token');
+    const apiBaseInput = document.querySelector('#base');
+    const tableStatus = document.querySelector('#table-status');
+    const barcodeRows = document.querySelector('#barcode-rows');
+    const managementRows = document.querySelector('#management-rows');
+    function formatHttpStatus(res) {
+      const labels = { 200: 'OK', 201: 'Created', 204: 'No Content', 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict', 500: 'Internal Server Error', 503: 'Service Unavailable' };
+      return `${res.status} ${res.statusText || labels[res.status] || 'HTTP Error'}`;
+    }
     const sampleForm = document.querySelector('#sample-form');
     const sampleMessage = document.querySelector('#sample-message'); let sampleBarcodeCount = 0;
     function resetSampleForm() { sampleForm.reset(); document.querySelector('#sample-id').value = ''; document.querySelector('#sample-cancel').hidden = true; sampleMessage.textContent = '' }
     document.querySelector('#sample-cancel').addEventListener('click', resetSampleForm);
-    sampleForm.addEventListener('submit', async event => { event.preventDefault(); for (const field of sampleForm.querySelectorAll('input:not([type=hidden])')) field.value = field.value.trim(); if (!sampleForm.reportValidity()) return; const id = document.querySelector('#sample-id').value; if (!id && sampleBarcodeCount >= 2) { sampleMessage.textContent = 'The table already contains the maximum of two records.'; return } const record = { id: id ? Number(id) : 0, barcode: document.querySelector('#sample-barcode').value.trim(), rfid_code: document.querySelector('#sample-rfid').value.trim(), dem_mk: document.querySelector('#sample-dem').value.trim(), prod_mk: document.querySelector('#sample-prod').value.trim(), inout_mk: document.querySelector('#sample-inout').value.trim() || null }; try { const res = await fetch(`${document.querySelector('#base').value.trim().replace(/\/+$/, '')}/api/uhf/sample-barcode${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...(document.querySelector('#token').value.trim() ? { Authorization: `Bearer ${document.querySelector('#token').value.trim()}` } : {}) }, body: JSON.stringify(record) }); if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`); resetSampleForm(); sampleMessage.textContent = id ? 'Record updated.' : 'Record created.'; await loadBarcodeRows() } catch (error) { sampleMessage.textContent = `Save failed: ${error.message}` } });
+    sampleForm.addEventListener('submit', async event => { event.preventDefault(); for (const field of sampleForm.querySelectorAll('input:not([type=hidden])')) field.value = field.value.trim(); if (!sampleForm.reportValidity()) return; const id = document.querySelector('#sample-id').value; if (!id && sampleBarcodeCount >= 2) { sampleMessage.textContent = 'The table already contains the maximum of two records.'; return } const record = { id: id ? Number(id) : 0, barcode: document.querySelector('#sample-barcode').value.trim(), rfid_code: document.querySelector('#sample-rfid').value.trim(), dem_mk: document.querySelector('#sample-dem').value.trim(), prod_mk: document.querySelector('#sample-prod').value.trim(), inout_mk: document.querySelector('#sample-inout').value.trim() || null }; try { const res = await fetch(`${apiBaseInput.value.trim().replace(/\/+$/, '')}/api/uhf/sample-barcode${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...(tokenInput.value.trim() ? { Authorization: `Bearer ${tokenInput.value.trim()}` } : {}) }, body: JSON.stringify(record) }); if (!res.ok) throw new Error(await res.text() || formatHttpStatus(res)); resetSampleForm(); sampleMessage.textContent = id ? 'Record updated.' : 'Record created.'; await loadBarcodeRows() } catch (error) { sampleMessage.textContent = `Save failed: ${error.message}` } });
     function setConnectionId(value) { document.querySelectorAll('[data-connection="true"]').forEach(input => input.value = value) }
-    async function send(ep, details, button) { const token = document.querySelector('#token').value.trim(); const base = document.querySelector('#base').value.trim().replace(/\/+$/, ''); const params = new URLSearchParams(); details.querySelectorAll('input[data-name]').forEach(input => { if (input.value.trim()) params.set(input.dataset.name, input.value.trim()) }); const url = `${base}/api/uhf${ep.path}${params.size ? '?' + params : ''}`; const status = document.querySelector('#status'), response = document.querySelector('#response'); button.disabled = true; status.className = 'status'; status.textContent = 'Sending...'; const started = performance.now(); document.querySelector('#requestMeta').textContent = `${ep.method} ${url}`; try { const res = await fetch(url, { method: ep.method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }); const elapsed = Math.round(performance.now() - started); const raw = await res.text(); let formatted = raw; try { formatted = JSON.stringify(JSON.parse(raw), null, 2) } catch { } response.textContent = formatted || '(empty response body)'; status.className = `status ${res.ok ? 'ok' : 'err'}`; status.textContent = `${res.status} ${res.statusText}`; document.querySelector('#durationMeta').textContent = `${elapsed} ms`; if (ep.path === '/connect' && res.ok) { try { const data = JSON.parse(raw); if (data.connectionId) setConnectionId(data.connectionId) } catch { } } if (ep.path === '/disconnect' && res.ok) { try { if (JSON.parse(raw).result) setConnectionId('') } catch { } } } catch (error) { status.className = 'status err'; status.textContent = 'Request failed'; response.textContent = `${error.message}\n\nCheck the server address, HTTPS certificate, and CORS policy if calling another host.`; document.querySelector('#durationMeta').textContent = `${Math.round(performance.now() - started)} ms` } finally { button.disabled = false } }
-    async function loadBarcodeRows() { const status = document.querySelector('#table-status'), body = document.querySelector('#barcode-rows'); const token = document.querySelector('#token').value.trim(), base = document.querySelector('#base').value.trim().replace(/\/+$/, ''); try { const res = await fetch(`${base}/api/uhf/sample-barcode`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }); if (!res.ok) throw new Error(`${res.status} ${res.statusText}`); const rows = await res.json(); sampleBarcodeCount = rows.length; body.replaceChildren(); if (!rows.length) { body.innerHTML = '<tr><td colspan="6" class="muted">No records found.</td></tr>' } else for (const row of rows) { const tr = document.createElement('tr'); for (const value of [row.id, row.barcode, row.rfid_code, row.dem_mk, row.prod_mk, row.inout_mk ?? '']) { const td = document.createElement('td'); td.textContent = value ?? ''; tr.append(td) } body.append(tr) } renderManagementRows(rows); status.className = 'status ok'; status.textContent = `${rows.length} records  |  updated ${new Date().toLocaleTimeString()}` } catch (error) { status.className = 'status err'; status.textContent = `Unavailable: ${error.message}` } }
-    function renderManagementRows(rows) { const body = document.querySelector('#management-rows'); body.replaceChildren(); if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="muted">No records found.</td></tr>'; return } for (const row of rows) { const tr = document.createElement('tr'); for (const value of [row.id, row.barcode, row.rfid_code, row.dem_mk, row.prod_mk, row.inout_mk ?? '']) { const td = document.createElement('td'); td.textContent = value ?? ''; tr.append(td) } const actionCell = document.createElement('td'); const actions = document.querySelector('#row-actions-template').content.cloneNode(true); actions.querySelector('.edit-action').addEventListener('click', () => { document.querySelector('#sample-id').value = row.id; document.querySelector('#sample-barcode').value = row.barcode; document.querySelector('#sample-rfid').value = row.rfid_code; document.querySelector('#sample-dem').value = row.dem_mk; document.querySelector('#sample-prod').value = row.prod_mk; document.querySelector('#sample-inout').value = row.inout_mk ?? ''; document.querySelector('#sample-cancel').hidden = false; document.querySelector('#sample-message').textContent = `Editing record ${row.id}.`; sampleForm.scrollIntoView({ behavior: 'smooth', block: 'center' }) }); actions.querySelector('.delete-action').addEventListener('click', async () => { if (!window.confirm(`Delete sample barcode record ${row.id}?`)) return; const token = document.querySelector('#token').value.trim(), base = document.querySelector('#base').value.trim().replace(/\/+$/, ''); try { const res = await fetch(`${base}/api/uhf/sample-barcode/${row.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }); if (!res.ok) throw new Error(await res.text() || `${res.status} ${res.statusText}`); await loadBarcodeRows() } catch (error) { sampleMessage.textContent = `Delete failed: ${error.message}` } }); actionCell.append(actions); tr.append(actionCell); body.append(tr) } }
+    async function send(ep, details, button) { const token = tokenInput.value.trim(); const base = apiBaseInput.value.trim().replace(/\/+$/, ''); const params = new URLSearchParams(); details.querySelectorAll('input[data-name]').forEach(input => { if (input.value.trim()) params.set(input.dataset.name, input.value.trim()) }); const url = `${base}/api/uhf${ep.path}${params.size ? '?' + params : ''}`; const status = document.querySelector('#status'), response = document.querySelector('#response'); button.disabled = true; status.className = 'status'; status.textContent = 'Sending...'; const started = performance.now(); document.querySelector('#requestMeta').textContent = `${ep.method} ${url}`; try { const res = await fetch(url, { method: ep.method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }); const elapsed = Math.round(performance.now() - started); const raw = await res.text(); let formatted = raw; try { formatted = JSON.stringify(JSON.parse(raw), null, 2) } catch { } response.textContent = formatted || '(empty response body)'; status.className = `status ${res.ok ? 'ok' : 'err'}`; status.textContent = formatHttpStatus(res); document.querySelector('#durationMeta').textContent = `${elapsed} ms`; if (ep.path === '/connect' && res.ok) { try { const data = JSON.parse(raw); if (data.connectionId) setConnectionId(data.connectionId) } catch { } } if (ep.path === '/disconnect' && res.ok) { try { if (JSON.parse(raw).result) setConnectionId('') } catch { } } } catch (error) { status.className = 'status err'; status.textContent = 'Request failed'; response.textContent = `${error.message}\n\nCheck the server address, HTTPS certificate, and CORS policy if calling another host.`; document.querySelector('#durationMeta').textContent = `${Math.round(performance.now() - started)} ms` } finally { button.disabled = false } }
+    let barcodeFetchGeneration = 0;
+    let barcodeReloadTimer;
+    function clearBarcodeTables() {
+      sampleBarcodeCount = 0;
+      barcodeRows.innerHTML = '<tr><td colspan="6" class="muted">Loading records...</td></tr>';
+      managementRows.innerHTML = '<tr><td colspan="7" class="muted">Loading records...</td></tr>';
+    }
+    function handleApiSettingsChange() {
+      barcodeFetchGeneration++;
+      if (!tokenInput.value.trim()) {
+        clearBarcodeTables();
+        const status = tableStatus;
+        status.className = 'status';
+        status.textContent = 'Ready';
+      } else {
+        const status = tableStatus;
+        status.className = 'status';
+        status.textContent = 'Loading...';
+      }
+      clearTimeout(barcodeReloadTimer);
+      barcodeReloadTimer = setTimeout(loadBarcodeRows, 250);
+    }
+    tokenInput.addEventListener('input', handleApiSettingsChange);
+    apiBaseInput.addEventListener('input', handleApiSettingsChange);
+    async function loadBarcodeRows() {
+      const generation = ++barcodeFetchGeneration;
+      const status = tableStatus;
+      const body = barcodeRows;
+      const token = tokenInput.value.trim();
+      const base = apiBaseInput.value.trim().replace(/\/+$/, '');
+      if (!token) {
+        clearBarcodeTables();
+        status.className = 'status';
+        status.textContent = 'Ready';
+        return;
+      }
+      status.className = 'status';
+      status.textContent = 'Loading...';
+      try {
+        const res = await fetch(`${base}/api/uhf/sample-barcode`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        if (generation !== barcodeFetchGeneration) return;
+        if (!res.ok) throw new Error(formatHttpStatus(res));
+        const rows = await res.json();
+        if (generation !== barcodeFetchGeneration) return;
+        sampleBarcodeCount = rows.length;
+        body.replaceChildren();
+        if (!rows.length) {
+          body.innerHTML = '<tr><td colspan="6" class="muted">No records found.</td></tr>';
+        } else {
+          for (const row of rows) {
+            const tr = document.createElement('tr');
+            for (const value of [row.id, row.barcode, row.rfid_code, row.dem_mk, row.prod_mk, row.inout_mk ?? '']) {
+              const td = document.createElement('td');
+              td.textContent = value ?? '';
+              tr.append(td);
+            }
+            body.append(tr);
+          }
+        }
+        renderManagementRows(rows);
+        status.className = 'status ok';
+        status.textContent = `${rows.length} records  |  updated ${new Date().toLocaleTimeString()}`;
+      } catch (error) {
+        if (generation !== barcodeFetchGeneration) return;
+        clearBarcodeTables();
+        status.className = 'status err';
+        status.textContent = error.message;
+      }
+    }
+    function renderManagementRows(rows) { const body = managementRows; body.replaceChildren(); if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="muted">No records found.</td></tr>'; return } for (const row of rows) { const tr = document.createElement('tr'); for (const value of [row.id, row.barcode, row.rfid_code, row.dem_mk, row.prod_mk, row.inout_mk ?? '']) { const td = document.createElement('td'); td.textContent = value ?? ''; tr.append(td) } const actionCell = document.createElement('td'); const actions = document.querySelector('#row-actions-template').content.cloneNode(true); actions.querySelector('.edit-action').addEventListener('click', () => { document.querySelector('#sample-id').value = row.id; document.querySelector('#sample-barcode').value = row.barcode; document.querySelector('#sample-rfid').value = row.rfid_code; document.querySelector('#sample-dem').value = row.dem_mk; document.querySelector('#sample-prod').value = row.prod_mk; document.querySelector('#sample-inout').value = row.inout_mk ?? ''; document.querySelector('#sample-cancel').hidden = false; document.querySelector('#sample-message').textContent = `Editing record ${row.id}.`; sampleForm.scrollIntoView({ behavior: 'smooth', block: 'center' }) }); actions.querySelector('.delete-action').addEventListener('click', async () => { if (!window.confirm(`Delete sample barcode record ${row.id}?`)) return; const token = tokenInput.value.trim(), base = apiBaseInput.value.trim().replace(/\/+$/, ''); try { const res = await fetch(`${base}/api/uhf/sample-barcode/${row.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }); if (!res.ok) throw new Error(await res.text() || formatHttpStatus(res)); await loadBarcodeRows() } catch (error) { sampleMessage.textContent = `Delete failed: ${error.message}` } }); actionCell.append(actions); tr.append(actionCell); body.append(tr) } }
     function addCardToggles() { document.querySelectorAll('.card').forEach(card => { const heading = card.querySelector(':scope > h2, :scope > h3, :scope > .result-head'); if (!heading) return; const content = document.createElement('div'); content.className = 'card-content'; while (heading.nextSibling) content.append(heading.nextSibling); const isResult = heading.classList.contains('result-head'); const title = isResult ? heading.querySelector('h2,h3') : heading; const row = document.createElement('div'); row.className = 'card-heading'; heading.replaceWith(row); row.append(title); if (isResult) { const status = heading.querySelector('.status'); if (status) row.append(status) } const button = document.createElement('button'); button.type = 'button'; button.className = 'toggle-card'; button.setAttribute('aria-expanded', 'true'); button.setAttribute('aria-label', `Toggle ${title.textContent.trim()}`); button.addEventListener('click', () => { const expanded = button.getAttribute('aria-expanded') === 'true'; content.hidden = expanded; button.setAttribute('aria-expanded', String(!expanded)) }); row.append(button); card.append(content) }) }
     addCardToggles();
-    loadBarcodeRows(); setInterval(loadBarcodeRows, 3000);
+    loadBarcodeRows(); setInterval(() => { if (tokenInput.value.trim()) loadBarcodeRows() }, 5000);
   </script>
 </body>
 
