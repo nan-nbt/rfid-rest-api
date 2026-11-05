@@ -351,6 +351,11 @@
       filter: brightness(1.07)
     }
 
+    .run.cancel {
+      background: var(--amber);
+      color: #19252b
+    }
+
     .run:disabled {
       opacity: .55;
       cursor: wait
@@ -583,12 +588,28 @@
       grid-template-columns: repeat(2, minmax(0, 1fr))
     }
 
-    .db-toolbar,
-    .row-actions {
+    .db-toolbar {
       display: flex;
       align-items: center;
       gap: 8px;
       margin-top: 12px
+    }
+
+    .db-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    #sample-message {
+      margin-left: auto;
+      text-align: right
+    }
+
+    .row-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px
     }
 
     .db-form+.table-wrap {
@@ -599,17 +620,43 @@
       border: 1px solid var(--line);
       border-radius: 6px;
       background: #14232c;
-      color: var(--text);
-      padding: 5px 8px;
+      display: inline-grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      padding: 0;
       cursor: pointer
+    }
+
+    .row-action svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8
+    }
+
+    .edit-action {
+      color: var(--mint)
+    }
+
+    .delete-action {
+      color: var(--red)
     }
 
     .row-action:hover {
       border-color: var(--mint)
     }
 
-    #sample-cancel:after {
-      content: none
+    .delete-action:hover {
+      border-color: var(--red)
+    }
+
+    .row-action:focus-visible {
+      outline: 2px solid var(--mint);
+      outline-offset: 2px
     }
 
     .db-form select {
@@ -766,8 +813,12 @@
       </aside>
     </div>
     <template id="row-actions-template"><span class="row-actions"><button type="button"
-          class="row-action edit-action">Edit</button><button type="button"
-          class="row-action delete-action">Delete</button></span></template>
+          class="row-action edit-action" aria-label="Edit record" title="Edit record"><svg aria-hidden="true"
+            focusable="false" viewBox="0 0 24 24"><path d="M12 20h9"/><path
+              d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button><button type="button"
+          class="row-action delete-action" aria-label="Delete record" title="Delete record"><svg aria-hidden="true"
+            focusable="false" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path
+              d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg></button></span></template>
     <template id="management-template">
       <section class="card db-management">
         <h2>Database Management</h2>
@@ -799,21 +850,21 @@
                 <option value="B">B - Out of stock</option>
               </select><span class="hint" id="inout-hint">Choose the warehouse status, or leave it unset.</span></div>
           </div>
-          <div class="db-toolbar"><button class="run" id="sample-save" type="submit">Save Record</button><button
-              class="toggle-card" id="sample-cancel" type="button" hidden>Cancel Edit</button><span class="hint"
-              id="sample-message" role="status"></span></div>
+          <div class="db-toolbar"><div class="db-actions"><button class="run" id="sample-save" type="submit">Save Record</button><button
+                class="run cancel" id="sample-cancel" type="button" hidden>Cancel Edit</button></div><span
+              class="hint" id="sample-message" role="status"></span></div>
         </form>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
+                <th>Actions</th>
                 <th>ID</th>
                 <th>Barcode</th>
                 <th>RFID Code</th>
                 <th>DEM</th>
                 <th>Production</th>
                 <th>In / Out</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="management-rows">
@@ -829,49 +880,305 @@
   </main>
   <script>
     const endpoints = [
-      { method: 'GET', path: '/connect', title: 'Connect to reader', desc: 'Open a TCP connection to the UHF reader. Saves the returned connection ID below.', fields: [['ip', 'Reader IP address', '172.19.68.9'], ['port', 'Reader port', '8888']] },
-      { method: 'GET', path: '/disconnect', title: 'Disconnect', desc: 'Close the reader session and release its device slot.', fields: [['connectionId', 'Connection ID', '']] },
-      { method: 'GET', path: '/read', title: 'Read single EPC', desc: 'Read the EPC from the tag currently in range.', fields: [['connectionId', 'Connection ID', '']] },
-      { method: 'POST', path: '/write', title: 'Write single EPC', desc: 'Write an EPC to a tag. The API checks for exactly 24 characters.', fields: [['connectionId', 'Connection ID', ''], ['epcCode', '24-character EPC', '000000000000000000000000']] },
-      { method: 'GET', path: '/start-read', title: 'Start inventory reading', desc: 'Begin continuous inventory scanning.', fields: [['connectionId', 'Connection ID', '']] },
-      { method: 'GET', path: '/stop-read', title: 'Stop inventory reading', desc: 'Stop continuous inventory scanning.', fields: [['connectionId', 'Connection ID', '']] },
-      { method: 'POST', path: '/production-scan', title: 'Production scan', desc: 'Requires a blank EPC tag and a matching barcode record. Writes the production EPC and marks the record as produced.', fields: [['connectionId', 'Connection ID', ''], ['barcode', 'Production barcode', 'CFM258999L']] },
-      { method: 'POST', path: '/warehouse-stock-in', title: 'Warehouse stock-in', desc: 'Reads the tag, validates production status, writes suffix 1111, and marks the record in stock.', fields: [['connectionId', 'Connection ID', '']] },
-      { method: 'POST', path: '/warehouse-stock-out', title: 'Warehouse stock-out', desc: 'Reads the tag, validates stock status, writes suffix 0000, and marks the record out of stock.', fields: [['connectionId', 'Connection ID', '']] }
+      {
+        method: 'GET',
+        path: '/connect',
+        title: 'Connect to reader',
+        desc: 'Open a TCP connection to the UHF reader. Saves the returned connection ID below.',
+        fields: [['ip', 'Reader IP address', '172.19.68.9'], ['port', 'Reader port', '8888']]
+      },
+      {
+        method: 'GET',
+        path: '/disconnect',
+        title: 'Disconnect',
+        desc: 'Close the reader session and release its device slot.',
+        fields: [['connectionId', 'Connection ID', '']]
+      },
+      {
+        method: 'GET',
+        path: '/read',
+        title: 'Read single EPC',
+        desc: 'Read the EPC from the tag currently in range.',
+        fields: [['connectionId', 'Connection ID', '']]
+      },
+      {
+        method: 'POST',
+        path: '/write',
+        title: 'Write single EPC',
+        desc: 'Write an EPC to a tag. The API checks for exactly 24 characters.',
+        fields: [['connectionId', 'Connection ID', ''], ['epcCode', '24-character EPC', '000000000000000000000000']]
+      },
+      {
+        method: 'GET',
+        path: '/start-read',
+        title: 'Start inventory reading',
+        desc: 'Begin continuous inventory scanning.',
+        fields: [['connectionId', 'Connection ID', '']]
+      },
+      {
+        method: 'GET',
+        path: '/stop-read',
+        title: 'Stop inventory reading',
+        desc: 'Stop continuous inventory scanning.',
+        fields: [['connectionId', 'Connection ID', '']]
+      },
+      {
+        method: 'POST',
+        path: '/production-scan',
+        title: 'Production scan',
+        desc: 'Requires a blank EPC tag and a matching barcode record. Writes the production EPC and marks the record as produced.',
+        fields: [['connectionId', 'Connection ID', ''], ['barcode', 'Production barcode', 'CFM258999L']]
+      },
+      {
+        method: 'POST',
+        path: '/warehouse-stock-in',
+        title: 'Warehouse stock-in',
+        desc: 'Reads the tag, validates production status, writes suffix 1111, and marks the record in stock.',
+        fields: [['connectionId', 'Connection ID', '']]
+      },
+      {
+        method: 'POST',
+        path: '/warehouse-stock-out',
+        title: 'Warehouse stock-out',
+        desc: 'Reads the tag, validates stock status, writes suffix 0000, and marks the record out of stock.',
+        fields: [['connectionId', 'Connection ID', '']]
+      }
     ];
     const mainPaths = new Set(['/connect', '/disconnect', '/read', '/write', '/start-read', '/stop-read']);
+
     for (const [i, ep] of endpoints.entries()) {
       const endpointRoot = document.querySelector(mainPaths.has(ep.path) ? '#main-endpoints' : '#custom-endpoints');
-      const details = document.createElement('details'); details.className = 'endpoint'; details.open = i === 0;
-      const summary = document.createElement('summary'); summary.className = 'ep-head'; summary.innerHTML = `<span class="verb ${ep.method.toLowerCase()}">${ep.method}</span><code class="path">/api/uhf${ep.path}</code><span class="ep-title">${ep.title}</span>`;
-      const body = document.createElement('div'); body.className = 'ep-body'; const desc = document.createElement('p'); desc.textContent = ep.desc; body.append(desc);
-      const inputs = document.createElement('div'); inputs.className = 'ep-inputs'; for (const [name, label, placeholder] of ep.fields) { const wrap = document.createElement('div'); wrap.className = 'field'; const id = `e${i}-${name}`; const lab = document.createElement('label'); lab.htmlFor = id; lab.textContent = label; const input = document.createElement('input'); input.id = id; input.dataset.name = name; input.placeholder = placeholder || name; if (name === 'connectionId') input.dataset.connection = 'true'; wrap.append(lab, input); inputs.append(wrap) } body.append(inputs);
-      const actions = document.createElement('div'); actions.className = 'ep-actions'; const button = document.createElement('button'); button.className = 'run'; button.textContent = 'Send request'; button.addEventListener('click', () => send(ep, details, button)); actions.append(button); body.append(actions); details.append(summary, body); endpointRoot.append(details)
+      const details = document.createElement('details');
+      details.className = 'endpoint';
+      details.open = i === 0;
+
+      const summary = document.createElement('summary');
+      summary.className = 'ep-head';
+      summary.innerHTML =
+        `<span class="verb ${ep.method.toLowerCase()}">${ep.method}</span>` +
+        `<code class="path">/api/uhf${ep.path}</code>` +
+        `<span class="ep-title">${ep.title}</span>`;
+
+      const body = document.createElement('div');
+      body.className = 'ep-body';
+      const description = document.createElement('p');
+      description.textContent = ep.desc;
+      body.append(description);
+
+      const inputs = document.createElement('div');
+      inputs.className = 'ep-inputs';
+      for (const [name, label, placeholder] of ep.fields) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'field';
+
+        const id = `e${i}-${name}`;
+        const labelElement = document.createElement('label');
+        labelElement.htmlFor = id;
+        labelElement.textContent = label;
+
+        const input = document.createElement('input');
+        input.id = id;
+        input.dataset.name = name;
+        input.placeholder = placeholder || name;
+        if (name === 'connectionId') input.dataset.connection = 'true';
+
+        wrapper.append(labelElement, input);
+        inputs.append(wrapper);
+      }
+      body.append(inputs);
+
+      const actions = document.createElement('div');
+      actions.className = 'ep-actions';
+      const button = document.createElement('button');
+      button.className = 'run';
+      button.textContent = 'Send request';
+      button.addEventListener('click', () => send(ep, details, button));
+      actions.append(button);
+      body.append(actions);
+
+      details.append(summary, body);
+      endpointRoot.append(details);
     }
+
     document.querySelector('#custom-endpoints').closest('.card').after(document.querySelector('#management-template').content.cloneNode(true));
+
     const tokenInput = document.querySelector('#token');
     const apiBaseInput = document.querySelector('#base');
+    const responseStatus = document.querySelector('#status');
+    const responseBody = document.querySelector('#response');
+    const requestMeta = document.querySelector('#requestMeta');
+    const durationMeta = document.querySelector('#durationMeta');
     const tableStatus = document.querySelector('#table-status');
     const barcodeRows = document.querySelector('#barcode-rows');
     const managementRows = document.querySelector('#management-rows');
+    const rowActionsTemplate = document.querySelector('#row-actions-template');
+
+    function getApiBase() {
+      return apiBaseInput.value.trim().replace(/\/+$/, '');
+    }
+
+    function getAuthHeaders(token = tokenInput.value.trim()) {
+      return token ? { Authorization: `Bearer ${token}` } : {};
+    }
+
+    function getSampleBarcodeUrl(id = '') {
+      return `${getApiBase()}/api/uhf/sample-barcode${id ? `/${id}` : ''}`;
+    }
+
     function formatHttpStatus(res) {
-      const labels = { 200: 'OK', 201: 'Created', 204: 'No Content', 400: 'Bad Request', 401: 'Unauthorized', 403: 'Forbidden', 404: 'Not Found', 409: 'Conflict', 500: 'Internal Server Error', 503: 'Service Unavailable' };
+      const labels = {
+        200: 'OK',
+        201: 'Created',
+        204: 'No Content',
+        400: 'Bad Request',
+        401: 'Unauthorized',
+        403: 'Forbidden',
+        404: 'Not Found',
+        409: 'Conflict',
+        500: 'Internal Server Error',
+        503: 'Service Unavailable'
+      };
       return `${res.status} ${res.statusText || labels[res.status] || 'HTTP Error'}`;
     }
+
     const sampleForm = document.querySelector('#sample-form');
-    const sampleMessage = document.querySelector('#sample-message'); let sampleBarcodeCount = 0;
-    function resetSampleForm() { sampleForm.reset(); document.querySelector('#sample-id').value = ''; document.querySelector('#sample-cancel').hidden = true; sampleMessage.textContent = '' }
+    const sampleMessage = document.querySelector('#sample-message');
+    let sampleBarcodeCount = 0;
+    let sampleMessageTimeout;
+
+    function setSampleMessage(message, clearAfter = 5000) {
+      clearTimeout(sampleMessageTimeout);
+      sampleMessage.textContent = message;
+
+      if (clearAfter > 0) {
+        sampleMessageTimeout = setTimeout(() => {
+          sampleMessage.textContent = '';
+          sampleMessageTimeout = undefined;
+        }, clearAfter);
+      }
+    }
+
+    function resetSampleForm() {
+      sampleForm.reset();
+      document.querySelector('#sample-id').value = '';
+      document.querySelector('#sample-cancel').hidden = true;
+      setSampleMessage('', 0);
+    }
+
     document.querySelector('#sample-cancel').addEventListener('click', resetSampleForm);
-    sampleForm.addEventListener('submit', async event => { event.preventDefault(); for (const field of sampleForm.querySelectorAll('input:not([type=hidden])')) field.value = field.value.trim(); if (!sampleForm.reportValidity()) return; const id = document.querySelector('#sample-id').value; if (!id && sampleBarcodeCount >= 2) { sampleMessage.textContent = 'The table already contains the maximum of two records.'; return } const record = { id: id ? Number(id) : 0, barcode: document.querySelector('#sample-barcode').value.trim(), rfid_code: document.querySelector('#sample-rfid').value.trim(), dem_mk: document.querySelector('#sample-dem').value.trim(), prod_mk: document.querySelector('#sample-prod').value.trim(), inout_mk: document.querySelector('#sample-inout').value.trim() || null }; try { const res = await fetch(`${apiBaseInput.value.trim().replace(/\/+$/, '')}/api/uhf/sample-barcode${id ? `/${id}` : ''}`, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...(tokenInput.value.trim() ? { Authorization: `Bearer ${tokenInput.value.trim()}` } : {}) }, body: JSON.stringify(record) }); if (!res.ok) throw new Error(await res.text() || formatHttpStatus(res)); resetSampleForm(); sampleMessage.textContent = id ? 'Record updated.' : 'Record created.'; await loadBarcodeRows() } catch (error) { sampleMessage.textContent = `Save failed: ${error.message}` } });
-    function setConnectionId(value) { document.querySelectorAll('[data-connection="true"]').forEach(input => input.value = value) }
-    async function send(ep, details, button) { const token = tokenInput.value.trim(); const base = apiBaseInput.value.trim().replace(/\/+$/, ''); const params = new URLSearchParams(); details.querySelectorAll('input[data-name]').forEach(input => { if (input.value.trim()) params.set(input.dataset.name, input.value.trim()) }); const url = `${base}/api/uhf${ep.path}${params.size ? '?' + params : ''}`; const status = document.querySelector('#status'), response = document.querySelector('#response'); button.disabled = true; status.className = 'status'; status.textContent = 'Sending...'; const started = performance.now(); document.querySelector('#requestMeta').textContent = `${ep.method} ${url}`; try { const res = await fetch(url, { method: ep.method, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }); const elapsed = Math.round(performance.now() - started); const raw = await res.text(); let formatted = raw; try { formatted = JSON.stringify(JSON.parse(raw), null, 2) } catch { } response.textContent = formatted || '(empty response body)'; status.className = `status ${res.ok ? 'ok' : 'err'}`; status.textContent = formatHttpStatus(res); document.querySelector('#durationMeta').textContent = `${elapsed} ms`; if (ep.path === '/connect' && res.ok) { try { const data = JSON.parse(raw); if (data.connectionId) setConnectionId(data.connectionId) } catch { } } if (ep.path === '/disconnect' && res.ok) { try { if (JSON.parse(raw).result) setConnectionId('') } catch { } } } catch (error) { status.className = 'status err'; status.textContent = 'Request failed'; response.textContent = `${error.message}\n\nCheck the server address, HTTPS certificate, and CORS policy if calling another host.`; document.querySelector('#durationMeta').textContent = `${Math.round(performance.now() - started)} ms` } finally { button.disabled = false } }
+
+    sampleForm.addEventListener('submit', async event => {
+      event.preventDefault();
+
+      for (const field of sampleForm.querySelectorAll('input:not([type=hidden])')) {
+        field.value = field.value.trim();
+      }
+      if (!sampleForm.reportValidity()) return;
+
+      const id = document.querySelector('#sample-id').value;
+      if (!id && sampleBarcodeCount >= 2) {
+        setSampleMessage('The table already contains the maximum of two records.');
+        return;
+      }
+
+      const record = {
+        id: id ? Number(id) : 0,
+        barcode: document.querySelector('#sample-barcode').value.trim(),
+        rfid_code: document.querySelector('#sample-rfid').value.trim(),
+        dem_mk: document.querySelector('#sample-dem').value.trim(),
+        prod_mk: document.querySelector('#sample-prod').value.trim(),
+        inout_mk: document.querySelector('#sample-inout').value.trim() || null
+      };
+
+      try {
+        const res = await fetch(getSampleBarcodeUrl(id), {
+          method: id ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify(record)
+        });
+        if (!res.ok) throw new Error(await res.text() || formatHttpStatus(res));
+
+        resetSampleForm();
+        setSampleMessage(id ? 'Record updated.' : 'Record created.', 5000);
+        await loadBarcodeRows();
+      } catch (error) {
+        setSampleMessage(`Save failed: ${error.message}`);
+      }
+    });
+
+    function setConnectionId(value) {
+      document.querySelectorAll('[data-connection="true"]').forEach(input => {
+        input.value = value;
+      });
+    }
+
+    async function send(ep, details, button) {
+      const token = tokenInput.value.trim();
+      const params = new URLSearchParams();
+      details.querySelectorAll('input[data-name]').forEach(input => {
+        if (input.value.trim()) params.set(input.dataset.name, input.value.trim());
+      });
+
+      const url = `${getApiBase()}/api/uhf${ep.path}${params.size ? '?' + params : ''}`;
+      button.disabled = true;
+      responseStatus.className = 'status';
+      responseStatus.textContent = 'Sending...';
+
+      const started = performance.now();
+      requestMeta.textContent = `${ep.method} ${url}`;
+
+      try {
+        const res = await fetch(url, {
+          method: ep.method,
+          headers: getAuthHeaders(token)
+        });
+        const elapsed = Math.round(performance.now() - started);
+        const raw = await res.text();
+        let formatted = raw;
+
+        try {
+          formatted = JSON.stringify(JSON.parse(raw), null, 2);
+        } catch { }
+
+        responseBody.textContent = formatted || '(empty response body)';
+        responseStatus.className = `status ${res.ok ? 'ok' : 'err'}`;
+        responseStatus.textContent = formatHttpStatus(res);
+        durationMeta.textContent = `${elapsed} ms`;
+
+        if (ep.path === '/connect' && res.ok) {
+          try {
+            const data = JSON.parse(raw);
+            if (data.connectionId) setConnectionId(data.connectionId);
+          } catch { }
+        }
+
+        if (ep.path === '/disconnect' && res.ok) {
+          try {
+            if (JSON.parse(raw).result) setConnectionId('');
+          } catch { }
+        }
+      } catch (error) {
+        responseStatus.className = 'status err';
+        responseStatus.textContent = 'Request failed';
+        responseBody.textContent = `${error.message}\n\nCheck the server address, HTTPS certificate, and CORS policy if calling another host.`;
+        durationMeta.textContent = `${Math.round(performance.now() - started)} ms`;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     let barcodeFetchGeneration = 0;
     let barcodeReloadTimer;
+
     function clearBarcodeTables() {
       sampleBarcodeCount = 0;
       barcodeRows.innerHTML = '<tr><td colspan="6" class="muted">Loading records...</td></tr>';
       managementRows.innerHTML = '<tr><td colspan="7" class="muted">Loading records...</td></tr>';
     }
+
     function handleApiSettingsChange() {
       barcodeFetchGeneration++;
       if (!tokenInput.value.trim()) {
@@ -887,14 +1194,15 @@
       clearTimeout(barcodeReloadTimer);
       barcodeReloadTimer = setTimeout(loadBarcodeRows, 250);
     }
+
     tokenInput.addEventListener('input', handleApiSettingsChange);
     apiBaseInput.addEventListener('input', handleApiSettingsChange);
+
     async function loadBarcodeRows() {
       const generation = ++barcodeFetchGeneration;
       const status = tableStatus;
       const body = barcodeRows;
       const token = tokenInput.value.trim();
-      const base = apiBaseInput.value.trim().replace(/\/+$/, '');
       if (!token) {
         clearBarcodeTables();
         status.className = 'status';
@@ -904,7 +1212,9 @@
       status.className = 'status';
       status.textContent = 'Loading...';
       try {
-        const res = await fetch(`${base}/api/uhf/sample-barcode`, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const res = await fetch(getSampleBarcodeUrl(), {
+          headers: getAuthHeaders(token)
+        });
         if (generation !== barcodeFetchGeneration) return;
         if (!res.ok) throw new Error(formatHttpStatus(res));
         const rows = await res.json();
@@ -934,10 +1244,100 @@
         status.textContent = error.message;
       }
     }
-    function renderManagementRows(rows) { const body = managementRows; body.replaceChildren(); if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="muted">No records found.</td></tr>'; return } for (const row of rows) { const tr = document.createElement('tr'); for (const value of [row.id, row.barcode, row.rfid_code, row.dem_mk, row.prod_mk, row.inout_mk ?? '']) { const td = document.createElement('td'); td.textContent = value ?? ''; tr.append(td) } const actionCell = document.createElement('td'); const actions = document.querySelector('#row-actions-template').content.cloneNode(true); actions.querySelector('.edit-action').addEventListener('click', () => { document.querySelector('#sample-id').value = row.id; document.querySelector('#sample-barcode').value = row.barcode; document.querySelector('#sample-rfid').value = row.rfid_code; document.querySelector('#sample-dem').value = row.dem_mk; document.querySelector('#sample-prod').value = row.prod_mk; document.querySelector('#sample-inout').value = row.inout_mk ?? ''; document.querySelector('#sample-cancel').hidden = false; document.querySelector('#sample-message').textContent = `Editing record ${row.id}.`; sampleForm.scrollIntoView({ behavior: 'smooth', block: 'center' }) }); actions.querySelector('.delete-action').addEventListener('click', async () => { if (!window.confirm(`Delete sample barcode record ${row.id}?`)) return; const token = tokenInput.value.trim(), base = apiBaseInput.value.trim().replace(/\/+$/, ''); try { const res = await fetch(`${base}/api/uhf/sample-barcode/${row.id}`, { method: 'DELETE', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } }); if (!res.ok) throw new Error(await res.text() || formatHttpStatus(res)); await loadBarcodeRows() } catch (error) { sampleMessage.textContent = `Delete failed: ${error.message}` } }); actionCell.append(actions); tr.append(actionCell); body.append(tr) } }
-    function addCardToggles() { document.querySelectorAll('.card').forEach(card => { const heading = card.querySelector(':scope > h2, :scope > h3, :scope > .result-head'); if (!heading) return; const content = document.createElement('div'); content.className = 'card-content'; while (heading.nextSibling) content.append(heading.nextSibling); const isResult = heading.classList.contains('result-head'); const title = isResult ? heading.querySelector('h2,h3') : heading; const row = document.createElement('div'); row.className = 'card-heading'; heading.replaceWith(row); row.append(title); if (isResult) { const status = heading.querySelector('.status'); if (status) row.append(status) } const button = document.createElement('button'); button.type = 'button'; button.className = 'toggle-card'; button.setAttribute('aria-expanded', 'true'); button.setAttribute('aria-label', `Toggle ${title.textContent.trim()}`); button.addEventListener('click', () => { const expanded = button.getAttribute('aria-expanded') === 'true'; content.hidden = expanded; button.setAttribute('aria-expanded', String(!expanded)) }); row.append(button); card.append(content) }) }
+
+    function renderManagementRows(rows) {
+      const body = managementRows;
+      body.replaceChildren();
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="7" class="muted">No records found.</td></tr>';
+        return;
+      }
+
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        const actionCell = document.createElement('td');
+        const actions = rowActionsTemplate.content.cloneNode(true);
+        actions.querySelector('.edit-action').addEventListener('click', () => {
+          document.querySelector('#sample-id').value = row.id;
+          document.querySelector('#sample-barcode').value = row.barcode;
+          document.querySelector('#sample-rfid').value = row.rfid_code;
+          document.querySelector('#sample-dem').value = row.dem_mk;
+          document.querySelector('#sample-prod').value = row.prod_mk;
+          document.querySelector('#sample-inout').value = row.inout_mk ?? '';
+          document.querySelector('#sample-cancel').hidden = false;
+          setSampleMessage(`Editing record ${row.id}.`, 0);
+          sampleForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        actions.querySelector('.delete-action').addEventListener('click', async () => {
+          if (!window.confirm(`Delete sample barcode record ${row.id}?`)) return;
+          const token = tokenInput.value.trim();
+          try {
+            const res = await fetch(getSampleBarcodeUrl(row.id), {
+              method: 'DELETE',
+              headers: getAuthHeaders(token)
+            });
+            if (!res.ok) throw new Error(await res.text() || formatHttpStatus(res));
+            resetSampleForm();
+            await loadBarcodeRows();
+            setSampleMessage('Record deleted.', 5000);
+          } catch (error) {
+            setSampleMessage(`Delete failed: ${error.message}`);
+          }
+        });
+        actionCell.append(actions);
+        tr.append(actionCell);
+
+        for (const value of [row.id, row.barcode, row.rfid_code, row.dem_mk, row.prod_mk, row.inout_mk ?? '']) {
+          const td = document.createElement('td');
+          td.textContent = value ?? '';
+          tr.append(td);
+        }
+        body.append(tr);
+      }
+    }
+
+    function addCardToggles() {
+      document.querySelectorAll('.card').forEach(card => {
+        const heading = card.querySelector(':scope > h2, :scope > h3, :scope > .result-head');
+        if (!heading) return;
+
+        const content = document.createElement('div');
+        content.className = 'card-content';
+        while (heading.nextSibling) content.append(heading.nextSibling);
+
+        const isResult = heading.classList.contains('result-head');
+        const title = isResult ? heading.querySelector('h2,h3') : heading;
+        const row = document.createElement('div');
+        row.className = 'card-heading';
+        heading.replaceWith(row);
+        row.append(title);
+
+        if (isResult) {
+          const status = heading.querySelector('.status');
+          if (status) row.append(status);
+        }
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'toggle-card';
+        button.setAttribute('aria-expanded', 'true');
+        button.setAttribute('aria-label', `Toggle ${title.textContent.trim()}`);
+        button.addEventListener('click', () => {
+          const expanded = button.getAttribute('aria-expanded') === 'true';
+          content.hidden = expanded;
+          button.setAttribute('aria-expanded', String(!expanded));
+        });
+
+        row.append(button);
+        card.append(content);
+      });
+    }
+
     addCardToggles();
-    loadBarcodeRows(); setInterval(() => { if (tokenInput.value.trim()) loadBarcodeRows() }, 5000);
+    loadBarcodeRows();
+    setInterval(() => {
+      if (tokenInput.value.trim()) loadBarcodeRows();
+    }, 5000);
   </script>
 </body>
 
