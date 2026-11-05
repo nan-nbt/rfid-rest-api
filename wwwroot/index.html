@@ -5,6 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101b24">
+  <link rel="icon" href="/favicon.ico?v=1" type="image/x-icon">
   <title>RFIDAPI: Reader Console</title>
   <style>
     :root {
@@ -70,6 +71,65 @@
     .topnote {
       color: var(--muted);
       font-size: .85rem
+    }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 20px
+    }
+
+    .header-nav a {
+      color: var(--text);
+      font-size: .9rem;
+      font-weight: 650;
+      text-decoration: none
+    }
+
+    .header-nav a:hover,
+    .header-nav a:focus-visible {
+      color: var(--mint)
+    }
+
+    .contact-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px
+    }
+
+    #contact .card-heading {
+      margin-bottom: 12px
+    }
+
+    #contact:has(> .card-content[hidden]) .card-heading,
+    .card.result:has(> .card-content[hidden]) .card-heading {
+      margin-bottom: 0
+    }
+
+    .contact-person {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: var(--panel2)
+    }
+
+    .contact-person h3 {
+      margin: 0 0 6px;
+      color: var(--mint);
+      font-size: .92rem
+    }
+
+    .contact-person p {
+      display: grid;
+      grid-template-columns: 3.5rem minmax(0, 1fr);
+      column-gap: 6px;
+      margin: 3px 0;
+      font-size: .82rem;
+      overflow-wrap: anywhere
+    }
+
+    .contact-person .muted {
+      color: var(--muted)
     }
 
     main {
@@ -416,6 +476,14 @@
         display: none
       }
 
+      .header-nav {
+        gap: 0
+      }
+
+      .contact-grid {
+        grid-template-columns: 1fr
+      }
+
       .ep-title {
         display: none
       }
@@ -583,7 +651,10 @@
 <body>
   <header>
     <div class="brand"><span class="mark">R</span><span>RFIDAPI <span class="muted">/ Reader Console</span></span></div>
-    <span class="topnote">.NET 9 | UHF RFID | Interactive API reference</span>
+    <nav class="header-nav" aria-label="Main navigation">
+      <a href="#contact">Contact</a>
+      <span class="topnote">.NET 9 | UHF RFID | Interactive API reference</span>
+    </nav>
   </header>
   <main>
     <section class="hero">
@@ -669,6 +740,29 @@
             <li>Disconnect when you are finished. Reader sessions are stored in this server instance's memory.</li>
           </ul><span class="pill">Windows x86 reader libraries</span> <span class="pill">PostgreSQL workflows</span>
         </section>
+        <section class="card" id="contact">
+          <h2>Contact Information</h2>
+          <div class="contact-grid">
+            <article class="contact-person">
+              <h3>Anan</h3>
+              <p><span class="muted">Group</span><span>: PCM IT</span></p>
+              <p><span class="muted">Phone</span><span>: 120-3053</span></p>
+              <p><span class="muted">Email</span><span>: <a href="mailto:anan.it@pci.co.id">anan.it@pci.co.id</a></span></p>
+            </article>
+            <article class="contact-person">
+              <h3>Alfito</h3>
+              <p><span class="muted">Group</span><span>: PCM IT</span></p>
+              <p><span class="muted">Phone</span><span>: 120-3069</span></p>
+              <p><span class="muted">Email</span><span>: <a href="mailto:alfito.it@pci.co.id">alfito.it@pci.co.id</a></span></p>
+            </article>
+            <article class="contact-person">
+              <h3>Rizki</h3>
+              <p><span class="muted">Group</span><span>: PCM IT</span></p>
+              <p><span class="muted">Phone</span><span>: 120-6639</span></p>
+              <p><span class="muted">Email</span><span>: <a href="mailto:rizki.it@pci.co.id">rizki.it@pci.co.id</a></span></p>
+            </article>
+          </div>
+        </section>
       </aside>
     </div>
     <template id="row-actions-template"><span class="row-actions"><button type="button"
@@ -731,7 +825,7 @@
         </div>
       </section>
     </template>
-    <p class="footer">RFIDAPI project documentation | .NET 9 | ASP.NET Core</p>
+    <p class="footer">RFIDAPI project documentation | .NET 9 | ASP.NET Core | Version 1.1.3</p>
   </main>
   <script>
     const endpoints = [
