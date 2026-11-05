@@ -14,6 +14,7 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
 - [Configuration](#configuration)
 - [Authentication & RBAC](#authentication--rbac)
 - [Build & Run](#build--run)
+- [Interactive Web Console](#interactive-web-console)
 - [API Endpoints](#api-endpoints)
   - [Connect](#1-connect-to-rfid-device)
   - [Disconnect](#2-disconnect)
@@ -35,16 +36,16 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
 - **Device Management**:
   - Connect to UHF RFID reader devices over TCP/IP by IP address and port.
   - Disconnect active device connections cleanly.
-  - In-memory exclusive connection management per client IP and per RFID device host (`ip:port`).
+  - In-memory connection tracking that checks for an existing connection by client IP and reader address (`ip:port`).
   - Active session tracking using unique GUID connection IDs.
 - **RFID Tag Operations**:
   - Read a single EPC tag from the reader buffer.
   - Write a 24-character hex EPC code to a tag.
   - Start and stop continuous inventory reading.
 - **Manufacturing & Warehouse Workflows**:
-  - **Production Scan**: Validates blank/initial tag EPC (`000000000000000000000000`), matches database barcode record, encodes barcode EPC (`rfid_code` + `dem_mk`), marks production status (`prod_mk = 'Y'`), with automatic EPC rollback on DB failure.
-  - **Warehouse Stock-In**: Reads tag, validates production scan status, encodes stock-in EPC (`rfid_code` + `1111`), updates inventory mark (`inout_mk = 'A'`), with EPC rollback on DB failure.
-  - **Warehouse Stock-Out**: Reads tag, validates prior stock-in status, encodes stock-out EPC (`rfid_code` + `0000`), updates inventory mark (`inout_mk = 'B'`), with EPC rollback on DB failure.
+  - **Production Scan**: Requires the initial tag EPC (`000000000000000000000000`), finds a database record by barcode, writes `rfid_code + dem_mk`, and sets `prod_mk` to `Y`.
+  - **Warehouse Stock-In**: Finds a database record by the tag's 20-character RFID code, writes the `1111` suffix, and sets `dem_mk` to `1111` and `inout_mk` to `A`.
+  - **Warehouse Stock-Out**: Requires a nonempty warehouse mark other than `B`, writes the `0000` suffix, and sets `dem_mk` to `0000` and `inout_mk` to `B`.
 - **Security & Authorization**:
   - JWT Bearer Authentication integrated with IAM / Keycloak OAuth 2.0.
   - Role-Based Access Control (RBAC) enforcing the `rfid-client-service` role parsed from token `realm_access.roles`.
@@ -52,6 +53,10 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
   - Entity Framework Core with PostgreSQL provider (`IDbContextFactory<AppDbContext>`).
   - Sample barcode entity mapping (`sample_barcode` table).
   - Authenticated list, create, update, and delete operations for sample barcode records. The API limits the table to two records when creating through the management route.
+- **Interactive Web Console**:
+  - Static API console served from `wwwroot/index.html`, with separate cards for main RFID operations, custom workflows, responses, prerequisites, and database management.
+  - Database tables refresh every five seconds while a bearer token is present. Clearing the token clears the displayed records and returns the database status to `Ready`.
+  - The navigation bar links to the Contact Information card. The page footer identifies this release as version `1.1.3`.
 
 ---
 
@@ -66,61 +71,52 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
   - `Microsoft.EntityFrameworkCore` (9.0.0)
   - `Microsoft.EntityFrameworkCore.Tools` (10.0.7)
   - `Npgsql.EntityFrameworkCore.PostgreSQL` (9.0.0)
-  - `Oracle.ManagedDataAccess.Core` (23.26.200)
+  - PostgreSQL is the only provider configured for application data. `Oracle.ManagedDataAccess.Core` is also referenced by the project but is not used by the current application data path.
 - **API Documentation**:
   - `Microsoft.AspNetCore.OpenApi` (9.0.9)
 - **Native UHF Libraries** (copied from `libs/` at build):
   - `UHFAPI.dll` & `UHFControl.dll`
   - Interop libraries (`Microsoft.Office.Interop.Excel.dll`, `Microsoft.Vbe.Interop.dll`, `office.dll`, `stdole.dll`)
   - `Newtonsoft.Json.dll`
-- **Application Icon**: `rfid-icon.ico`
+- **Application Icons**: `rfid-icon.ico` is the executable icon; `wwwroot/favicon.ico` is served as the browser tab icon.
 
 ---
 
 ## Project Structure
 
 ```text
-rfidapi_test/
-├── Configuarations/             # Entity Framework Core DbContext and PostgreSQL persistence configurations
-│   └── *.cs
-├── Constants/                   # Application constants, response messages, and connection status definitions
-│   └── *.cs
-├── Controllers/                 # ASP.NET Core API controllers exposing secured RFID endpoints
-│   └── *.cs
-├── Helpers/                     # Utility helpers (hex/byte conversions, string validation, native driver wrapper)
-│   └── *.cs
-├── libs/                        # Native 32-bit (x86) reader drivers and runtime DLL dependencies
-│   └── *.dll
-├── Managers/                    # In-memory session tracking and reader device exclusivity manager
-│   └── *.cs
-├── Models/                      # Domain entity models (sample_barcode) and session state definitions
-│   └── *.cs
-├── Properties/                  # Application launch profiles, environment variables, and port bindings
-│   └── launchSettings.json
-├── Services/                    # UHF reader communication services and transactional business workflows
-│   └── *.cs
-├── wwwroot/                     # Static web assets hosting the interactive API documentation and console
+rfidapi/
+├── Configuarations/             # Entity Framework Core DbContext and PostgreSQL persistence configuration
+├── Constants/                   # Application constants and connection status values
+├── Controllers/                 # Secured RFID and sample barcode API endpoints
+├── Helpers/                     # Data conversion, string utilities, and native UHF API wrapper
+├── libs/                        # 32-bit native reader and runtime DLL dependencies
+├── Managers/                    # In-memory RFID connection tracking
+├── Models/                      # RFID connection, tag telemetry, and sample barcode models
+├── Properties/                  # HTTP and HTTPS launch profiles
+├── Services/                    # RFID reader operations and database workflow methods
+├── wwwroot/                     # Interactive console and browser favicon
+│   ├── favicon.ico
 │   └── index.html
-├── appsettings.*.json           # Environment configuration files (base, Debug, Release)
-├── Program.cs                   # Application entry point, dependency injection, and IAM JWT middleware
-├── rfid-icon.ico                # Application executable and console icon
-├── RFIDAPI.csproj               # Project build definition, NuGet packages, and x86 target configuration
-├── RFIDAPI.http                 # REST Client request collection with IAM OAuth 2.0 examples
-├── RFIDAPI.sln                  # Visual Studio solution file
-└── UHFTAGInfo.cs                # Tag telemetry data structure (PC, EPC, TID, RSSI, Ant)
+├── appsettings.json             # Application configuration
+├── Program.cs                   # Dependency injection, authentication, middleware, and routes
+├── RFIDAPI.csproj               # .NET target, packages, and native dependency copy rules
+├── RFIDAPI.http                 # REST Client requests (store credentials securely)
+├── RFIDAPI.sln                  # Visual Studio solution
+└── rfid-icon.ico                # Windows executable icon
 ```
 
 ## Requirements & Prerequisites
 
-1. **.NET 9.0 SDK** (32-bit / x86 compatible)
-2. **Windows Operating System**: The native UHF reader libraries (`libs/UHFAPI.dll`, `libs/UHFControl.dll`) are 32-bit Windows DLLs. The project must be built and run on Windows targeting `x86`.
+1. **.NET 9.0 SDK**.
+2. **Windows Operating System**: The native UHF reader libraries (`libs/UHFAPI.dll`, `libs/UHFControl.dll`) are 32-bit Windows DLLs. The project targets `x86` and must run in a compatible Windows environment.
 3. **PostgreSQL Database**: Accessible database instance hosting the `sample_barcode` table.
 4. **IAM / Keycloak Service**: An OAuth 2.0 / OIDC provider issuing JWT access tokens.
 5. **UHF RFID Reader**: Network-enabled UHF RFID reader reachable over TCP/IP.
 
 ## Database Schema
 
-The API uses PostgreSQL table `sample_barcode`, mapped by [`SampleBarcode`](Models/SampleBarcode.cs) and exposed through [`AppDbContext.SampleBarcodes`](Configuarations/AppDbContext.cs). The repository does not contain a `.sql` schema script. The native RFID libraries handle reader communication and do not define the database schema, so the table and columns below are derived from the entity and the database operations in [`UhfService`](Services/UHFService.cs) and [`UhfController`](Controllers/UHFController.cs).
+The API uses PostgreSQL table `sample_barcode`, mapped by [`SampleBarcode`](Models/SampleBarcode.cs) and exposed through [`AppDbContext.SampleBarcodes`](Configuarations/AppDbContext.cs). The repository does not contain a `.sql` schema script or EF Core migrations. The native RFID libraries handle reader communication and do not define the database schema, so the table and columns below are derived from the entity and the database operations in [`UhfService`](Services/UHFService.cs) and [`UhfController`](Controllers/UHFController.cs).
 
 | Column | PostgreSQL type | Required | Description |
 |---|---|---:|---|
@@ -131,7 +127,7 @@ The API uses PostgreSQL table `sample_barcode`, mapped by [`SampleBarcode`](Mode
 | `prod_mk` | `text` | Yes | Production status. Production Scan sets it to `Y`; warehouse operations reject records marked `N`. |
 | `inout_mk` | `text` | No | Warehouse status. Stock-in sets `A`; stock-out sets `B`. A missing or empty value is treated as not yet stocked in. |
 
-The code compares `barcode` and `rfid_code` to find a single record, so each should identify the intended record uniquely. The model does not configure database uniqueness, indexes, or maximum string lengths; add constraints and indexes to match your data and deployment requirements.
+The code looks up a single record by `barcode` or `rfid_code`, so values should identify the intended record uniquely. The model does not configure database uniqueness, indexes, or maximum string lengths; add constraints and indexes to match your data and deployment requirements. The Database Management form validates the RFID code and DEM format in the browser; the API itself only checks that `barcode`, `rfid_code`, `dem_mk`, and `prod_mk` are nonempty and trims their values.
 
 Example PostgreSQL DDL for a new database:
 
@@ -154,7 +150,7 @@ For databases using a PostgreSQL `serial` column, ensure its sequence is synchro
 
 ## Configuration
 
-Configuration is managed via JSON configuration files (`appsettings.json`, `appsettings.dev.json`, or environment variables).
+Configuration is managed in `appsettings.json` or through environment variables. Replace the placeholder IAM issuer, audience, PostgreSQL connection string, and Kestrel URL with values for the deployment environment. Do not commit credentials or access tokens.
 
 ### Example `appsettings.json`
 
@@ -167,8 +163,8 @@ Configuration is managed via JSON configuration files (`appsettings.json`, `apps
     }
   },
   "IamConfig": {
-    "Authority": "https://iamlab.pouchen.com/auth/realms/service",
-    "Audience": "account"
+    "Authority": "https://iam.example.com/realms/your-realm",
+    "Audience": "your-api-audience"
   },
   "ConnectionStrings": {
     "PostgresConnection": "Host=your-host;Port=5432;Database=your-db;Username=your-user;Password=your-password"
@@ -177,7 +173,7 @@ Configuration is managed via JSON configuration files (`appsettings.json`, `apps
   "Kestrel": {
     "Endpoints": {
       "Http": {
-        "Url": "http://0.0.0.0:5083"
+        "Url": "http://localhost:5083"
       }
     }
   }
@@ -188,26 +184,26 @@ Configuration is managed via JSON configuration files (`appsettings.json`, `apps
 
 | Section | Parameter | Description |
 |---|---|---|
-| `IamConfig` | `Authority` | OIDC issuer URL of the IAM realm (e.g. `https://iamlab.pouchen.com/auth/realms/service`). |
-| `IamConfig` | `Audience` | Expected audience (`aud`) in the JWT payload (e.g. `account`). |
+| `IamConfig` | `Authority` | OIDC issuer URL of the IAM realm; must match the token's `iss` claim. |
+| `IamConfig` | `Audience` | Expected audience (`aud`) in the JWT payload. |
 | `ConnectionStrings` | `PostgresConnection` | Connection string for the PostgreSQL database. |
-| `Kestrel` | `Endpoints:Http:Url` | Binding address and port (default: `http://0.0.0.0:5083`). |
+| `Kestrel` | `Endpoints:Http:Url` | HTTP binding address and port. The checked-in file contains a deployment placeholder; the sample above uses `http://localhost:5083`. |
 
 ### Launch Profiles
 
 Configured in [`Properties/launchSettings.json`](Properties/launchSettings.json):
 
-- **`http`**: `http://localhost:5083` (`ASPNETCORE_ENVIRONMENT=dev`)
-- **`https`**: `https://localhost:7121;http://localhost:5083` (`ASPNETCORE_ENVIRONMENT=dev`)
+- **`http`**: `http://localhost:5083` (`ASPNETCORE_ENVIRONMENT=Debug`)
+- **`https`**: `https://localhost:7121` and `http://localhost:5083` (`ASPNETCORE_ENVIRONMENT=Debug`)
 
 > [!NOTE]
-> OpenAPI / Swagger is enabled in [`Program.cs`](Program.cs) when `ASPNETCORE_ENVIRONMENT` is `Development`. When running with the `dev` profile, OpenAPI endpoints are not mapped unless `ASPNETCORE_ENVIRONMENT` is explicitly set to `Development`.
+> The OpenAPI JSON document is mapped in [`Program.cs`](Program.cs) only when `ASPNETCORE_ENVIRONMENT` is `Development`. The supplied `http` and `https` launch profiles set the environment to `Debug`, and the project does not configure a Swagger UI.
 
 ---
 
 ## Authentication & RBAC
 
-All endpoints under [`UHFController`](Controllers/UHFController.cs) require a valid bearer token and the `rfid-client-service` role.
+All endpoints under [`UHFController`](Controllers/UHFController.cs) require a valid bearer token with the `rfid-client-service` role. The controller reads role names from the token's `realm_access.roles` claim.
 
 ### 1. Acquiring an IAM Access Token
 
@@ -262,6 +258,14 @@ dotnet run --environment Development
 
 ---
 
+## Interactive Web Console
+
+The browser console is served from the application root. It separates the standard reader operations from the production and warehouse workflows, displays HTTP responses, and provides a live view of the `sample_barcode` table. Enter a bearer token in Request Setup to load the database tables; they refresh every five seconds while the token is present. Clearing the token clears the displayed rows and resets the database status to `Ready`.
+
+The Database Management card supports listing, creating, editing, and deleting records. Its form validates required values, a 20-character hexadecimal RFID code, a four-character binary DEM mark, and the supported production and warehouse marks. Creating records is limited to two rows. The Contact link in the header navigates to the contacts; the footer shows version `1.1.3`.
+
+---
+
 ## API Endpoints
 
 Base Route:
@@ -274,6 +278,8 @@ All requests require the header:
 ```http
 Authorization: Bearer <access_token>
 ```
+
+RFID endpoint errors do not all use conventional HTTP status codes: many validation, reader, and workflow errors are returned as `404 Not Found`, while connection conflicts and inventory start/stop failures may return `200 OK` with `result: false`. Check both the HTTP status and the JSON response body.
 
 ---
 
@@ -288,8 +294,8 @@ Establishes a TCP connection to an RFID reader.
 
 #### Rules & Constraints
 - Validates that the client IP is identifiable.
-- **Client Exclusivity**: A client IP can maintain only one active connection at a time.
-- **Device Exclusivity**: An RFID reader (`ip:port`) can only be connected to one client at a time.
+- **Client Check**: Refuses a new connection when the remote client IP already has a tracked session.
+- **Device Check**: Refuses a new connection when the requested RFID reader (`ip:port`) is already tracked.
 
 #### Response (Success - 200 OK)
 ```json
@@ -312,7 +318,7 @@ Establishes a TCP connection to an RFID reader.
 ```json
 {
   "result": false,
-  "status": "RFID device already in use"
+  "status": "RFID device is alredy in used"
 }
 ```
 
@@ -440,14 +446,14 @@ Processes an initial manufacturing tag scan and associates it with a database ba
   - `connectionId` (`string`, required): Active connection ID.
   - `barcode` (`string`, required): Production barcode to match in database (e.g. `CFM258999L`).
 
-#### Workflow Logic:
+#### Workflow Logic
 1. Reads the current tag EPC.
 2. Asserts the current EPC is blank (`000000000000000000000000`).
 3. Queries `sample_barcode` table for the matching `barcode`.
 4. Validates that `prod_mk` is not already `'Y'`.
 5. Writes the new EPC composed of `rfid_code + dem_mk` (24 characters).
 6. Updates `sample_barcode.prod_mk` to `'Y'`.
-7. **Rollback**: If the database update fails, the EPC on the physical tag is rolled back.
+7. If the database update fails, the controller attempts another EPC write. The current implementation sends the same newly composed EPC again, so it does **not** restore the initial blank EPC; check the tag and database record manually after this failure.
 
 #### Response (Success - 200 OK)
 ```json
@@ -460,7 +466,7 @@ Processes an initial manufacturing tag scan and associates it with a database ba
     "prod_mk": "Y",
     "inout_mk": null
   },
-  "status": "success"
+  "status": "Success"
 }
 ```
 
@@ -474,14 +480,14 @@ Handles warehouse inventory receipt of a production-scanned item.
 - **Query Parameters**:
   - `connectionId` (`string`, required): Active connection ID.
 
-#### Workflow Logic:
+#### Workflow Logic
 1. Reads current EPC and extracts the first 20 characters as `rfid_code`.
 2. Finds the barcode record in `sample_barcode` by `rfid_code`.
-3. Validates that the tag was production scanned (`prod_mk == "Y"`).
+3. Rejects a record marked not produced (`prod_mk == "N"`).
 4. Validates that the tag is not already stocked in (`inout_mk != "A"`).
 5. Writes new EPC = `rfid_code + "1111"`.
 6. Updates database record with `dem_mk = "1111"` and `inout_mk = "A"`.
-7. **Rollback**: If the database update fails, the EPC on the physical tag is rolled back.
+7. If the database update fails, the controller attempts to restore the EPC using the record's previous `dem_mk` value.
 
 #### Response (Success - 200 OK)
 ```json
@@ -494,7 +500,7 @@ Handles warehouse inventory receipt of a production-scanned item.
     "prod_mk": "Y",
     "inout_mk": "A"
   },
-  "status": "success"
+  "status": "Success"
 }
 ```
 
@@ -508,15 +514,15 @@ Handles warehouse inventory dispatch of a previously stocked-in item.
 - **Query Parameters**:
   - `connectionId` (`string`, required): Active connection ID.
 
-#### Workflow Logic:
+#### Workflow Logic
 1. Reads current EPC and extracts the first 20 characters as `rfid_code`.
 2. Finds the barcode record in `sample_barcode` by `rfid_code`.
-3. Validates that the tag was production scanned (`prod_mk == "Y"`).
-4. Validates that the tag was previously stocked in (`inout_mk` is not null or empty).
-5. Validates that the tag is not already stocked out (`inout_mk != "B"`).
+3. Rejects a record marked not produced (`prod_mk == "N"`).
+4. Requires a nonempty `inout_mk` value.
+5. Rejects a record already marked stocked out (`inout_mk == "B"`).
 6. Writes new EPC = `rfid_code + "0000"`.
 7. Updates database record with `dem_mk = "0000"` and `inout_mk = "B"`.
-8. **Rollback**: If the database update fails, the EPC on the physical tag is rolled back.
+8. If the database update fails, the controller attempts to restore the EPC using the record's previous `dem_mk` value.
 
 #### Response (Success - 200 OK)
 ```json
@@ -529,7 +535,7 @@ Handles warehouse inventory dispatch of a previously stocked-in item.
     "prod_mk": "Y",
     "inout_mk": "B"
   },
-  "status": "success"
+  "status": "Success"
 }
 ```
 
@@ -537,9 +543,9 @@ Handles warehouse inventory dispatch of a previously stocked-in item.
 
 ## Database Management Methods
 
-The interactive console includes a **Database Management** card for creating, editing, and deleting `sample_barcode` records. The displayed database table refreshes every three seconds. The create API rejects additional records once the table contains two rows; edits and deletes remain available.
+The interactive console includes a **Database Management** card for listing, creating, editing, and deleting `sample_barcode` records. The displayed tables refresh every five seconds while a bearer token is present. Clearing the token clears the displayed records and resets the database status to `Ready`. On create, the API checks whether two records already exist and returns `409 Conflict` when the limit has been reached; updates and deletes are still available. This count check is not atomic across simultaneous create requests.
 
-The console validates its form inputs before sending requests:
+The console validates its form inputs in the browser before sending requests:
 
 - `barcode` is required; leading and trailing spaces are removed.
 - `rfid_code` must contain exactly 20 hexadecimal characters.
@@ -556,16 +562,25 @@ The endpoints are secured by the same bearer token and role as the RFID endpoint
 | `PUT` | `/api/uhf/sample-barcode/{id}` | Update a record by ID. |
 | `DELETE` | `/api/uhf/sample-barcode/{id}` | Delete a record by ID. |
 
-The create and update request bodies use the `SampleBarcode` JSON shape. Include the required `id` property because it is marked with `JsonRequired`; the console sends `0` for a new record, and PostgreSQL generates its actual ID. For updates, the route ID selects the record to update.
+The API itself checks that `barcode`, `rfid_code`, `dem_mk`, and `prod_mk` are nonempty and trims their values; the RFID-code and DEM format rules above are enforced by the browser form, not by the API. The create and update request bodies use the `SampleBarcode` JSON shape. Include the required `id` property because it is marked with `JsonRequired`; the console sends `0` for a new record, and PostgreSQL generates its actual ID. For updates, the route ID selects the record to update and the body `id` is ignored.
+
+| Method | Success response | Other documented outcomes |
+|---|---|---|
+| `GET` | `200 OK`, records ordered by `id` | — |
+| `POST` | `201 Created`, created record | `400 Bad Request` for missing required fields; `409 Conflict` when two records already exist |
+| `PUT` | `200 OK`, updated record | `400 Bad Request` for missing required fields; `404 Not Found` when the route ID does not exist |
+| `DELETE` | `204 No Content` | `404 Not Found` when the route ID does not exist |
 
 ## Connection Management & Concurrency
 
-The API manages RFID reader connections in memory through [`RfidConnectionManager`](Managers/RFIDConnectionManager.cs) using thread-safe collections (`ConcurrentDictionary<string, RfidConnection>`):
+The API tracks RFID reader connections in process memory through [`RfidConnectionManager`](Managers/RFIDConnectionManager.cs) using a `ConcurrentDictionary<string, RfidConnection>` keyed by connection ID:
 
-1. **Per-Client Exclusivity**: A client identified by its remote IP can only have one active connection open at any given time (`IsClientConnected`).
-2. **Per-Device Exclusivity**: A physical RFID device identified by `ip:port` can only be held by a single connection session at a time (`IsDeviceInUse`).
+1. **Client Check**: `Connect` checks the remote client IP and declines a new connection when that IP already has a tracked session.
+2. **Device Check**: `Connect` checks the reader `ip:port` and declines a new connection when that reader is already tracked.
 3. **Session Lifecycle**: Each successful connection receives a unique GUID `connectionId`. All subsequent tag and workflow requests must supply this `connectionId`.
-4. **Cleanup**: Calling the `/api/uhf/disconnect` endpoint releases the hardware TCP socket and purges the connection session from memory.
+4. **Cleanup**: Calling the `/api/uhf/disconnect` endpoint releases the hardware TCP socket and removes the connection session from memory. Sessions are not persisted and are lost when the process stops.
+
+The client and device checks happen before the new session is added and are not a distributed or atomic lock. Simultaneous connection attempts or multiple application instances can therefore bypass the checks.
 
 ---
 
@@ -573,6 +588,6 @@ The API manages RFID reader connections in memory through [`RfidConnectionManage
 
 A REST Client request file is available in the repository root:
 
-- [`RFIDAPI.http`](RFIDAPI.http): Contains requests for obtaining an IAM token and calling the API. Review the OAuth, reader, and connection values and replace them with values for your environment before use.
+- [`RFIDAPI.http`](RFIDAPI.http): Contains requests for obtaining an IAM token and calling the API. Treat its IAM client secret and access token values as credentials: replace them with secure local values before use or sharing, and never commit real credentials or tokens.
 
 Run the requests in Visual Studio or Visual Studio Code with the **REST Client** extension.

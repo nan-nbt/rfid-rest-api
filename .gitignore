@@ -303,4 +303,7 @@ appsettings.Release.json
 .history
 .ionide
 
+### HTTP client test
+*.http
+
 # End of https://www.toptal.com/developers/gitignore/api/aspnetcore,visualstudiocode,dotnetcore
