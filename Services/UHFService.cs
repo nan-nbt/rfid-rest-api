@@ -10,6 +10,7 @@ public class UhfService
     private readonly IDbContextFactory<AppDbContext> _factory;
     private bool _isConnected;
     private bool _isInventory;
+    public bool IsInventory => _isInventory;
     private readonly List<UhfTagInfo> _tagList = [];
 
     /*
@@ -52,6 +53,11 @@ public class UhfService
 
     public bool StartReadInventory()
     {
+        if (_isInventory)
+        {
+            return false;
+        }
+
         var inventory = UhfApi.StartInventory();
         if (inventory)
         {

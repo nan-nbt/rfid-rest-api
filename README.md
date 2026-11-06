@@ -1,6 +1,6 @@
 # RFIDAPI
 
-RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It provides secured reader operations and manufacturing and warehouse workflows.
+RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It provides secured reader operations and manufacturing and warehouse workflows with a standardized Unified Envelope JSON response pattern across all endpoints.
 
 ---
 
@@ -15,6 +15,7 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
 - [Authentication & RBAC](#authentication--rbac)
 - [Build & Run](#build--run)
 - [Interactive Web Console](#interactive-web-console)
+- [Unified Envelope Response Pattern](#unified-envelope-response-pattern)
 - [API Endpoints](#api-endpoints)
   - [Connect](#1-connect-to-rfid-device)
   - [Disconnect](#2-disconnect)
@@ -39,13 +40,20 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
   - In-memory connection tracking that checks for an existing connection by client IP and reader address (`ip:port`).
   - Active session tracking using unique GUID connection IDs.
 - **RFID Tag Operations**:
-  - Read a single EPC tag from the reader buffer.
+  - Read a single EPC tag from the reader buffer. EPC codes are always returned space-formatted (e.g. `00 92 00 00 00 00 00 00 00 00 AC B7`).
   - Write a 24-character hex EPC code to a tag.
   - Start and stop continuous inventory reading.
 - **Manufacturing & Warehouse Workflows**:
-  - **Production Scan**: Requires the initial tag EPC (`000000000000000000000000`), finds a database record by barcode, writes `rfid_code + dem_mk`, and sets `prod_mk` to `Y`.
+  - **Production Scan**: Requires the initial blank tag EPC (`000000000000000000000000`), finds a database record by barcode, writes `rfid_code + dem_mk`, and sets `prod_mk` to `Y`.
   - **Warehouse Stock-In**: Finds a database record by the tag's 20-character RFID code, writes the `1111` suffix, and sets `dem_mk` to `1111` and `inout_mk` to `A`.
   - **Warehouse Stock-Out**: Requires a nonempty warehouse mark other than `B`, writes the `0000` suffix, and sets `dem_mk` to `0000` and `inout_mk` to `B`.
+- **Unified Envelope Response Pattern**:
+  - All endpoints return a consistent JSON envelope with `success`, `status_code`, `message`, `timestamp`, and either a `data` object (success) or an `error` object (failure).
+  - All JSON property names use `snake_case`.
+  - `status_code` and `message` always reflect real HTTP status codes and their standard uppercase text (e.g. `200` / `"OK"`, `400` / `"BAD REQUEST"`, `404` / `"NOT FOUND"`, `502` / `"BAD GATEWAY"`).
+  - Framework-level model binding errors (missing required query parameters) are also intercepted and returned in the same envelope format.
+- **Centralized Constants**:
+  - All response messages in the controller are defined as constants in the `RFIDAPI.Constants` namespace (`Constants/Common.cs` and `Constants/ConnectionStatus.cs`) for consistency and maintainability.
 - **Security & Authorization**:
   - JWT Bearer Authentication integrated with IAM / Keycloak OAuth 2.0.
   - Role-Based Access Control (RBAC) enforcing the `rfid-client-service` role parsed from token `realm_access.roles`.
@@ -55,6 +63,7 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
   - Authenticated list, create, update, and delete operations for sample barcode records. The API limits the table to two records when creating through the management route.
 - **Interactive Web Console**:
   - Static API console served from `wwwroot/index.html`, with separate cards for main RFID operations, custom workflows, responses, prerequisites, and database management.
+  - The RFID Code field in Database Management auto-formats input as space-separated hex pairs on key-up (e.g. `0092000000000000AB76` → `00 92 00 00 00 00 00 00 AB 76`).
   - Database tables refresh every five seconds while a bearer token is present. Clearing the token clears the displayed records and returns the database status to `Ready`.
   - The navigation bar links to the Contact Information card. The page footer identifies this release as version `1.1.3`.
 
@@ -87,36 +96,51 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
 ```text
 rfidapi/
 ├── Configuarations/             # Entity Framework Core DbContext and PostgreSQL persistence configuration
-├── Constants/                   # Application constants and connection status values
+├── Constants/                   # Centralized response message constants (Common.cs, ConnectionStatus.cs)
 ├── Controllers/                 # Secured RFID and sample barcode API endpoints
-├── Helpers/                     # Data conversion, string utilities, and native UHF API wrapper
+├── Helpers/                     # Data conversion, string utilities (FormatEpcWithSpaces), HTTP status helper, and native UHF API wrapper
 ├── libs/                        # 32-bit native reader and runtime DLL dependencies
 ├── Managers/                    # In-memory RFID connection tracking
-├── Models/                      # RFID connection, tag telemetry, and sample barcode models
+├── Models/                      # API envelope models (ApiResponse, ApiResponseData), RFID connection, tag telemetry, and sample barcode models
 ├── Properties/                  # HTTP and HTTPS launch profiles
 ├── Services/                    # RFID reader operations and database workflow methods
 ├── wwwroot/                     # Interactive console and browser favicon
 │   ├── favicon.ico
 │   └── index.html
 ├── appsettings.json             # Application configuration
-├── Program.cs                   # Dependency injection, authentication, middleware, and routes
+├── Program.cs                   # Dependency injection, authentication, middleware, routes, and model binding error factory
 ├── RFIDAPI.csproj               # .NET target, packages, and native dependency copy rules
 ├── RFIDAPI.http                 # REST Client requests (store credentials securely)
 ├── RFIDAPI.sln                  # Visual Studio solution
 └── rfid-icon.ico                # Windows executable icon
 ```
 
+### Key Source Files
+
+| File | Purpose |
+|---|---|
+| `Models/ApiResponse.cs` | Defines `ApiResponse<T>`, `ApiError`, and factory helpers (`Ok`, `Success`, `Error`). |
+| `Models/ApiResponseData.cs` | Strongly-typed response DTOs: `DeviceConnectionData`, `TagOperationData`, `MessageData`. |
+| `Helpers/HttpStatusHelper.cs` | Maps HTTP status integers to uppercase standard text (`OK`, `BAD REQUEST`, etc.). |
+| `Helpers/StringUtils.cs` | `FormatEpcWithSpaces` for space-separating EPC hex strings; `IsHexNumber` validator. |
+| `Constants/Common.cs` | All tag, EPC, barcode, workflow, and database management message constants. |
+| `Constants/ConnectionStatus.cs` | Connection lifecycle message constants and format strings. |
+
+---
+
 ## Requirements & Prerequisites
 
 1. **.NET 9.0 SDK**.
 2. **Windows Operating System**: The native UHF reader libraries (`libs/UHFAPI.dll`, `libs/UHFControl.dll`) are 32-bit Windows DLLs. The project targets `x86` and must run in a compatible Windows environment.
 3. **PostgreSQL Database**: Accessible database instance hosting the `sample_barcode` table.
-4. **IAM / Keycloak Service**: An OAuth 2.0 / OIDC provider issuing JWT access tokens.
+4. **IAM / Keycloak Service**: An OAuth 2.0 / OIDC provider issuing JWT access tokens with the `rfid-client-service` role in `realm_access.roles`.
 5. **UHF RFID Reader**: Network-enabled UHF RFID reader reachable over TCP/IP.
+
+---
 
 ## Database Schema
 
-The API uses PostgreSQL table `sample_barcode`, mapped by [`SampleBarcode`](Models/SampleBarcode.cs) and exposed through [`AppDbContext.SampleBarcodes`](Configuarations/AppDbContext.cs). The repository does not contain a `.sql` schema script or EF Core migrations. The native RFID libraries handle reader communication and do not define the database schema, so the table and columns below are derived from the entity and the database operations in [`UhfService`](Services/UHFService.cs) and [`UhfController`](Controllers/UHFController.cs).
+The API uses PostgreSQL table `sample_barcode`, mapped by [`SampleBarcode`](Models/SampleBarcode.cs) and exposed through [`AppDbContext.SampleBarcodes`](Configuarations/AppDbContext.cs). The repository does not contain a `.sql` schema script or EF Core migrations. The table and columns below are derived from the entity and the database operations in [`UhfService`](Services/UHFService.cs) and [`UhfController`](Controllers/UHFController.cs).
 
 | Column | PostgreSQL type | Required | Description |
 |---|---|---:|---|
@@ -127,7 +151,7 @@ The API uses PostgreSQL table `sample_barcode`, mapped by [`SampleBarcode`](Mode
 | `prod_mk` | `text` | Yes | Production status. Production Scan sets it to `Y`; warehouse operations reject records marked `N`. |
 | `inout_mk` | `text` | No | Warehouse status. Stock-in sets `A`; stock-out sets `B`. A missing or empty value is treated as not yet stocked in. |
 
-The code looks up a single record by `barcode` or `rfid_code`, so values should identify the intended record uniquely. The model does not configure database uniqueness, indexes, or maximum string lengths; add constraints and indexes to match your data and deployment requirements. The Database Management form validates the RFID code and DEM format in the browser; the API itself only checks that `barcode`, `rfid_code`, `dem_mk`, and `prod_mk` are nonempty and trims their values.
+The code looks up a single record by `barcode` or `rfid_code`, so values should identify the intended record uniquely. The model does not configure database uniqueness, indexes, or maximum string lengths; add constraints and indexes to match your data and deployment requirements.
 
 Example PostgreSQL DDL for a new database:
 
@@ -141,8 +165,6 @@ CREATE TABLE sample_barcode (
     inout_mk text NULL
 );
 ```
-
-The SQL types and nullability above reflect the current C# model and PostgreSQL provider conventions. The example does not specify uniqueness, indexes, or maximum string lengths because these are not defined in the project model. If your deployment schema specifies them, retain those definitions.
 
 For databases using a PostgreSQL `serial` column, ensure its sequence is synchronized with the largest existing `id` after importing or inserting records with explicit IDs. Otherwise, the next generated ID may conflict with an existing primary key.
 
@@ -187,7 +209,7 @@ Configuration is managed in `appsettings.json` or through environment variables.
 | `IamConfig` | `Authority` | OIDC issuer URL of the IAM realm; must match the token's `iss` claim. |
 | `IamConfig` | `Audience` | Expected audience (`aud`) in the JWT payload. |
 | `ConnectionStrings` | `PostgresConnection` | Connection string for the PostgreSQL database. |
-| `Kestrel` | `Endpoints:Http:Url` | HTTP binding address and port. The checked-in file contains a deployment placeholder; the sample above uses `http://localhost:5083`. |
+| `Kestrel` | `Endpoints:Http:Url` | HTTP binding address and port. |
 
 ### Launch Profiles
 
@@ -203,7 +225,7 @@ Configured in [`Properties/launchSettings.json`](Properties/launchSettings.json)
 
 ## Authentication & RBAC
 
-All endpoints under [`UHFController`](Controllers/UHFController.cs) require a valid bearer token with the `rfid-client-service` role. The controller reads role names from the token's `realm_access.roles` claim.
+All endpoints under [`UhfController`](Controllers/UHFController.cs) require a valid bearer token with the `rfid-client-service` role. The controller reads role names from the token's `realm_access.roles` claim.
 
 ### 1. Acquiring an IAM Access Token
 
@@ -260,9 +282,76 @@ dotnet run --environment Development
 
 ## Interactive Web Console
 
-The browser console is served from the application root. It separates the standard reader operations from the production and warehouse workflows, displays HTTP responses, and provides a live view of the `sample_barcode` table. Enter a bearer token in Request Setup to load the database tables; they refresh every five seconds while the token is present. Clearing the token clears the displayed rows and resets the database status to `Ready`.
+The browser console is served from the application root (`/`). It separates the standard reader operations from the production and warehouse workflows, displays HTTP responses, and provides a live view of the `sample_barcode` table. Enter a bearer token in Request Setup to load the database tables; they refresh every five seconds while the token is present. Clearing the token clears the displayed rows and resets the database status to `Ready`.
 
-The Database Management card supports listing, creating, editing, and deleting records. Its form validates required values, a 20-character hexadecimal RFID code, a four-character binary DEM mark, and the supported production and warehouse marks. Creating records is limited to two rows. The Contact link in the header navigates to the contacts; the footer shows version `1.1.3`.
+The Database Management card supports listing, creating, editing, and deleting records:
+
+- The **RFID Code** input field automatically formats its display value as space-separated hex pairs on key-up (e.g. typing `0092000000000000AB76` renders as `00 92 00 00 00 00 00 00 AB 76`). Spaces are stripped before the value is sent to the API.
+- The form validates: a required barcode, exactly 20 hexadecimal characters for RFID code, exactly four binary digits for DEM mark, and the supported production and warehouse mark values.
+- Creating records is limited to two rows.
+- When editing an existing record, the RFID Code field is pre-populated with its space-formatted value.
+
+The Contact link in the header navigates to the contacts; the footer shows version `1.1.3`.
+
+---
+
+## Unified Envelope Response Pattern
+
+Every endpoint returns a JSON object with the following top-level shape:
+
+```json
+{
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T01:47:34.2202207+00:00",
+  "data": { }
+}
+```
+
+On error, the `data` property is omitted and replaced by `error`:
+
+```json
+{
+  "success": false,
+  "status_code": 404,
+  "message": "NOT FOUND",
+  "timestamp": "2026-11-06T02:03:31.1824965+00:00",
+  "error": {
+    "message": "The connection_id 523ac0ec-914b-4677-b85e-19e6d8a1e697 not found."
+  }
+}
+```
+
+### Envelope Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `success` | `boolean` | `true` for 2xx responses, `false` for all errors. |
+| `status_code` | `integer` | Real HTTP status code (e.g. `200`, `400`, `404`, `502`). |
+| `message` | `string` | Uppercase standard HTTP reason phrase (e.g. `"OK"`, `"BAD REQUEST"`, `"NOT FOUND"`, `"BAD GATEWAY"`). |
+| `timestamp` | `string` | ISO 8601 UTC timestamp of the response. |
+| `data` | `object` | Present only on success. Shape varies by endpoint. |
+| `error` | `object` | Present only on failure. Always contains a `message` string. |
+
+> [!NOTE]
+> `null` values inside `data` (e.g. `connection_id: null` on disconnect, `inout_mk: null` for unset marks) are intentionally preserved in the output. Only the top-level `data` and `error` envelope properties are conditionally omitted.
+
+### Missing Required Parameters
+
+If a required query parameter is omitted, the framework model binding error is intercepted and returned in the same envelope format:
+
+```json
+{
+  "success": false,
+  "status_code": 400,
+  "message": "BAD REQUEST",
+  "timestamp": "2026-11-06T01:52:32.3974133+00:00",
+  "error": {
+    "message": "The connection_id field is required."
+  }
+}
+```
 
 ---
 
@@ -279,7 +368,8 @@ All requests require the header:
 Authorization: Bearer <access_token>
 ```
 
-RFID endpoint errors do not all use conventional HTTP status codes: many validation, reader, and workflow errors are returned as `404 Not Found`, while connection conflicts and inventory start/stop failures may return `200 OK` with `result: false`. Check both the HTTP status and the JSON response body.
+> [!IMPORTANT]
+> All EPC codes in responses are formatted with spaces between each byte pair (e.g. `"00 92 00 00 00 00 00 00 00 00 AC B7"`).
 
 ---
 
@@ -297,28 +387,44 @@ Establishes a TCP connection to an RFID reader.
 - **Client Check**: Refuses a new connection when the remote client IP already has a tracked session.
 - **Device Check**: Refuses a new connection when the requested RFID reader (`ip:port`) is already tracked.
 
-#### Response (Success - 200 OK)
+#### Response (Success — 200 OK)
 ```json
 {
-  "result": true,
-  "connectionId": "34a9de02-2ff3-4998-a38d-66c65d846c88",
-  "status": "Connected"
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T01:47:34.2202207+00:00",
+  "data": {
+    "device_address": "172.19.68.9:8888",
+    "connection_id": "523ac0ec-914b-4677-b85e-19e6d8a1e697",
+    "message": "Connected"
+  }
 }
 ```
 
-#### Response (Client already connected - 200 OK)
+#### Response (Device unreachable — 502 Bad Gateway)
 ```json
 {
-  "result": false,
-  "status": "This client already connected"
+  "success": false,
+  "status_code": 502,
+  "message": "BAD GATEWAY",
+  "timestamp": "2026-11-06T01:48:04.7983770+00:00",
+  "error": {
+    "message": "Can not connect to RFID device host 172.19.68.9:8888"
+  }
 }
 ```
 
-#### Response (Device already in use - 200 OK)
+#### Response (Client already connected / Device in use — 400 Bad Request)
 ```json
 {
-  "result": false,
-  "status": "RFID device is alredy in used"
+  "success": false,
+  "status_code": 400,
+  "message": "BAD REQUEST",
+  "timestamp": "2026-11-06T01:48:04.7983770+00:00",
+  "error": {
+    "message": "This client is already connected"
+  }
 }
 ```
 
@@ -332,19 +438,44 @@ Disconnects the active RFID reader connection and removes it from the connection
 - **Query Parameters**:
   - `connectionId` (`string`, required): Connection ID returned by the `connect` endpoint.
 
-#### Response (Success - 200 OK)
+#### Response (Success — 200 OK)
 ```json
 {
-  "result": true,
-  "status": "Disconnected"
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T01:47:34.2202207+00:00",
+  "data": {
+    "device_address": "172.19.68.9:8888",
+    "connection_id": null,
+    "message": "Disconnected"
+  }
 }
 ```
 
-#### Response (Not Found - 404)
+#### Response (Missing parameter — 400 Bad Request)
 ```json
 {
-  "result": false,
-  "status": "Connection not found"
+  "success": false,
+  "status_code": 400,
+  "message": "BAD REQUEST",
+  "timestamp": "2026-11-06T01:52:32.3974133+00:00",
+  "error": {
+    "message": "The connection_id field is required."
+  }
+}
+```
+
+#### Response (Connection not found — 404 Not Found)
+```json
+{
+  "success": false,
+  "status_code": 404,
+  "message": "NOT FOUND",
+  "timestamp": "2026-11-06T01:52:32.3974133+00:00",
+  "error": {
+    "message": "The connection_id 523ac0ec-914b-4677-b85e-19e6d8a1e697 not found."
+  }
 }
 ```
 
@@ -358,17 +489,30 @@ Reads a single EPC code from the currently positioned tag.
 - **Query Parameters**:
   - `connectionId` (`string`, required): Active connection ID.
 
-#### Response (Success - 200 OK)
+#### Response (Success — 200 OK)
 ```json
 {
-  "epcCode": "000000000000000000000000"
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T02:02:54.2332455+00:00",
+  "data": {
+    "epc_code": "00 00 00 00 00 00 00 00 00 00 00 00",
+    "message": "Tag read successful"
+  }
 }
 ```
 
-#### Response (Error - 404)
+#### Response (No tag detected — 404 Not Found)
 ```json
 {
-  "message": "Tag read EPC code failed"
+  "success": false,
+  "status_code": 404,
+  "message": "NOT FOUND",
+  "timestamp": "2026-11-06T02:03:31.1824965+00:00",
+  "error": {
+    "message": "The connection_id 523ac0ec-914b-4677-b85e-19e6d8a1e697 not found."
+  }
 }
 ```
 
@@ -376,26 +520,50 @@ Reads a single EPC code from the currently positioned tag.
 
 ### 4. Write Single EPC
 
-Writes the provided 24-character EPC string to the RFID tag. The endpoint checks its length; provide hexadecimal content for the reader.
+Writes the provided 24-character hex EPC string to the RFID tag.
 
 - **URL**: `POST /api/uhf/write`
 - **Query Parameters**:
   - `connectionId` (`string`, required): Active connection ID.
-  - `epcCode` (`string`, required): Exactly 24 characters. Supply a hexadecimal EPC value.
+  - `epcCode` (`string`, required): Exactly 24 hexadecimal characters (spaces are stripped before validation).
 
-#### Response (Success - 200 OK)
+#### Response (Success — 200 OK)
 ```json
 {
-  "result": true,
-  "epcCode": "000000000000000000000000",
-  "status": "Success"
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T01:55:03.1287280+00:00",
+  "data": {
+    "epc_code": "00 92 00 00 00 00 00 00 00 00 AC B7",
+    "message": "Tag write successful"
+  }
 }
 ```
 
-#### Response (Validation Error - 404)
+#### Response (Invalid EPC — 400 Bad Request)
 ```json
 {
-  "message": "EPC code not valid. length must be 24 digit aplhanumeric"
+  "success": false,
+  "status_code": 400,
+  "message": "BAD REQUEST",
+  "timestamp": "2026-11-06T01:59:19.5999976+00:00",
+  "error": {
+    "message": "The epc_code field length must be 24-digit hexadecimal code."
+  }
+}
+```
+
+#### Response (Write hardware failure — 502 Bad Gateway)
+```json
+{
+  "success": false,
+  "status_code": 502,
+  "message": "BAD GATEWAY",
+  "timestamp": "2026-11-06T01:59:19.5999976+00:00",
+  "error": {
+    "message": "Failed to write EPC code to tag. Please ensure the tag is in antenna range"
+  }
 }
 ```
 
@@ -409,11 +577,32 @@ Begins continuous inventory scanning on the reader.
 - **Query Parameters**:
   - `connectionId` (`string`, required): Active connection ID.
 
-#### Response (200 OK)
+> [!NOTE]
+> Re-entrancy is prevented in `UhfService`. If inventory is already running, the service returns `false` and the endpoint responds with `502 Bad Gateway`.
+
+#### Response (Success — 200 OK)
 ```json
 {
-  "result": true,
-  "status": "Start read inventory"
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T02:08:39.2758801+00:00",
+  "data": {
+    "message": "Start read inventory"
+  }
+}
+```
+
+#### Response (Already scanning — 502 Bad Gateway)
+```json
+{
+  "success": false,
+  "status_code": 502,
+  "message": "BAD GATEWAY",
+  "timestamp": "2026-11-06T02:11:20.2001607+00:00",
+  "error": {
+    "message": "The device status on start read inventory. Please stop it first."
+  }
 }
 ```
 
@@ -427,11 +616,29 @@ Stops active inventory scanning on the reader.
 - **Query Parameters**:
   - `connectionId` (`string`, required): Active connection ID.
 
-#### Response (200 OK)
+#### Response (Success — 200 OK)
 ```json
 {
-  "result": true,
-  "status": "Stop read inventory"
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T02:08:39.2758801+00:00",
+  "data": {
+    "message": "Stop read inventory"
+  }
+}
+```
+
+#### Response (Not scanning — 502 Bad Gateway)
+```json
+{
+  "success": false,
+  "status_code": 502,
+  "message": "BAD GATEWAY",
+  "timestamp": "2026-11-06T02:14:48.9396408+00:00",
+  "error": {
+    "message": "Failed to stop read inventory."
+  }
 }
 ```
 
@@ -439,34 +646,76 @@ Stops active inventory scanning on the reader.
 
 ### 7. Production Scan
 
-Processes an initial manufacturing tag scan and associates it with a database barcode.
+Processes an initial manufacturing tag scan and associates it with a database barcode record.
 
 - **URL**: `POST /api/uhf/production-scan`
 - **Query Parameters**:
   - `connectionId` (`string`, required): Active connection ID.
-  - `barcode` (`string`, required): Production barcode to match in database (e.g. `CFM258999L`).
+  - `barcode` (`string`, required): Production barcode to match in the database (e.g. `CFM258999L`).
 
 #### Workflow Logic
 1. Reads the current tag EPC.
 2. Asserts the current EPC is blank (`000000000000000000000000`).
 3. Queries `sample_barcode` table for the matching `barcode`.
-4. Validates that `prod_mk` is not already `'Y'`.
+4. Validates that `prod_mk` is not already `Y`.
 5. Writes the new EPC composed of `rfid_code + dem_mk` (24 characters).
-6. Updates `sample_barcode.prod_mk` to `'Y'`.
-7. If the database update fails, the controller attempts another EPC write. The current implementation sends the same newly composed EPC again, so it does **not** restore the initial blank EPC; check the tag and database record manually after this failure.
+6. Updates `sample_barcode.prod_mk` to `Y`.
+7. If the database update fails, the controller attempts to rollback the EPC write. On rollback failure, `502 Bad Gateway` is returned.
 
-#### Response (Success - 200 OK)
+#### Response (Success — 200 OK)
 ```json
 {
-  "result": {
-    "id": 1,
-    "barcode": "CFM258999L",
-    "rfid_code": "E2801191200000000000",
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T02:19:20.5455693+00:00",
+  "data": {
+    "id": 12,
+    "barcode": "CFM258999R",
+    "rfid_code": "0092000000000000AB76",
     "dem_mk": "0000",
     "prod_mk": "Y",
     "inout_mk": null
-  },
-  "status": "Success"
+  }
+}
+```
+
+#### Response (EPC not blank — 404 Not Found)
+```json
+{
+  "success": false,
+  "status_code": 404,
+  "message": "NOT FOUND",
+  "timestamp": "2026-11-06T02:20:39.4794414+00:00",
+  "error": {
+    "message": "EPC code not valid. Required EPC code 00 00 00 00 00 00 00 00 00 00 00 00"
+  }
+}
+```
+
+#### Response (Barcode not found — 404 Not Found)
+```json
+{
+  "success": false,
+  "status_code": 404,
+  "message": "NOT FOUND",
+  "timestamp": "2026-11-06T02:20:39.4794414+00:00",
+  "error": {
+    "message": "[CFM258999R] Barcode does not exist in database"
+  }
+}
+```
+
+#### Response (Already produced — 404 Not Found)
+```json
+{
+  "success": false,
+  "status_code": 404,
+  "message": "NOT FOUND",
+  "timestamp": "2026-11-06T02:20:39.4794414+00:00",
+  "error": {
+    "message": "[CFM258999R] Barcode is already production scanned"
+  }
 }
 ```
 
@@ -489,18 +738,34 @@ Handles warehouse inventory receipt of a production-scanned item.
 6. Updates database record with `dem_mk = "1111"` and `inout_mk = "A"`.
 7. If the database update fails, the controller attempts to restore the EPC using the record's previous `dem_mk` value.
 
-#### Response (Success - 200 OK)
+#### Response (Success — 200 OK)
 ```json
 {
-  "result": {
-    "id": 1,
-    "barcode": "CFM258999L",
-    "rfid_code": "E2801191200000000000",
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T02:21:58.6117501+00:00",
+  "data": {
+    "id": 12,
+    "barcode": "CFM258999R",
+    "rfid_code": "0092000000000000AB76",
     "dem_mk": "1111",
     "prod_mk": "Y",
     "inout_mk": "A"
-  },
-  "status": "Success"
+  }
+}
+```
+
+#### Response (Already stocked in — 404 Not Found)
+```json
+{
+  "success": false,
+  "status_code": 404,
+  "message": "NOT FOUND",
+  "timestamp": "2026-11-06T02:23:17.5985344+00:00",
+  "error": {
+    "message": "00 92 00 00 00 00 00 00 AB 76 11 11 Tag already stocked in warehouse"
+  }
 }
 ```
 
@@ -518,24 +783,40 @@ Handles warehouse inventory dispatch of a previously stocked-in item.
 1. Reads current EPC and extracts the first 20 characters as `rfid_code`.
 2. Finds the barcode record in `sample_barcode` by `rfid_code`.
 3. Rejects a record marked not produced (`prod_mk == "N"`).
-4. Requires a nonempty `inout_mk` value.
+4. Requires a nonempty `inout_mk` value (must have been stocked in first).
 5. Rejects a record already marked stocked out (`inout_mk == "B"`).
 6. Writes new EPC = `rfid_code + "0000"`.
 7. Updates database record with `dem_mk = "0000"` and `inout_mk = "B"`.
 8. If the database update fails, the controller attempts to restore the EPC using the record's previous `dem_mk` value.
 
-#### Response (Success - 200 OK)
+#### Response (Success — 200 OK)
 ```json
 {
-  "result": {
-    "id": 1,
-    "barcode": "CFM258999L",
-    "rfid_code": "E2801191200000000000",
+  "success": true,
+  "status_code": 200,
+  "message": "OK",
+  "timestamp": "2026-11-06T02:26:38.6553439+00:00",
+  "data": {
+    "id": 12,
+    "barcode": "CFM258999R",
+    "rfid_code": "0092000000000000AB76",
     "dem_mk": "0000",
     "prod_mk": "Y",
     "inout_mk": "B"
-  },
-  "status": "Success"
+  }
+}
+```
+
+#### Response (Already stocked out — 404 Not Found)
+```json
+{
+  "success": false,
+  "status_code": 404,
+  "message": "NOT FOUND",
+  "timestamp": "2026-11-06T02:26:57.2908279+00:00",
+  "error": {
+    "message": "00 92 00 00 00 00 00 00 AB 76 00 00 Tag already stocked out warehouse"
+  }
 }
 ```
 
@@ -543,12 +824,12 @@ Handles warehouse inventory dispatch of a previously stocked-in item.
 
 ## Database Management Methods
 
-The interactive console includes a **Database Management** card for listing, creating, editing, and deleting `sample_barcode` records. The displayed tables refresh every five seconds while a bearer token is present. Clearing the token clears the displayed records and resets the database status to `Ready`. On create, the API checks whether two records already exist and returns `409 Conflict` when the limit has been reached; updates and deletes are still available. This count check is not atomic across simultaneous create requests.
+The interactive console includes a **Database Management** card for listing, creating, editing, and deleting `sample_barcode` records. The displayed tables refresh every five seconds while a bearer token is present. Clearing the token clears the displayed records and resets the database status to `Ready`. On create, the API checks whether two records already exist and returns `409 Conflict` when the limit has been reached; updates and deletes are still available.
 
 The console validates its form inputs in the browser before sending requests:
 
 - `barcode` is required; leading and trailing spaces are removed.
-- `rfid_code` must contain exactly 20 hexadecimal characters.
+- `rfid_code` must contain exactly 20 hexadecimal characters. The field auto-formats with space pairs as you type; spaces are stripped before submission.
 - `dem_mk` must contain exactly four binary digits (`0` or `1`).
 - `prod_mk` must be `Y` (produced) or `N` (not produced).
 - `inout_mk` may be empty, `A` (in stock), or `B` (out of stock).
@@ -560,16 +841,18 @@ The endpoints are secured by the same bearer token and role as the RFID endpoint
 | `GET` | `/api/uhf/sample-barcode` | List all records, ordered by `id`. |
 | `POST` | `/api/uhf/sample-barcode` | Create a record. Returns `409 Conflict` when two records already exist. |
 | `PUT` | `/api/uhf/sample-barcode/{id}` | Update a record by ID. |
-| `DELETE` | `/api/uhf/sample-barcode/{id}` | Delete a record by ID. |
+| `DELETE` | `/api/uhf/sample-barcode/{id}` | Delete a record by ID. Returns `204 No Content`. |
 
-The API itself checks that `barcode`, `rfid_code`, `dem_mk`, and `prod_mk` are nonempty and trims their values; the RFID-code and DEM format rules above are enforced by the browser form, not by the API. The create and update request bodies use the `SampleBarcode` JSON shape. Include the required `id` property because it is marked with `JsonRequired`; the console sends `0` for a new record, and PostgreSQL generates its actual ID. For updates, the route ID selects the record to update and the body `id` is ignored.
+All create/update/delete responses follow the Unified Envelope Pattern. The `DELETE` endpoint returns `204 No Content` (no body) on success.
 
-| Method | Success response | Other documented outcomes |
+| Method | Success response | Error responses |
 |---|---|---|
-| `GET` | `200 OK`, records ordered by `id` | — |
-| `POST` | `201 Created`, created record | `400 Bad Request` for missing required fields; `409 Conflict` when two records already exist |
-| `PUT` | `200 OK`, updated record | `400 Bad Request` for missing required fields; `404 Not Found` when the route ID does not exist |
-| `DELETE` | `204 No Content` | `404 Not Found` when the route ID does not exist |
+| `GET` | `200 OK`, `data` array of records | — |
+| `POST` | `201 Created`, `data` with created record | `400 Bad Request` for missing required fields; `409 Conflict` when two records already exist |
+| `PUT` | `200 OK`, `data` with updated record | `400 Bad Request` for missing required fields; `404 Not Found` when route ID does not exist |
+| `DELETE` | `204 No Content` | `404 Not Found` when route ID does not exist |
+
+---
 
 ## Connection Management & Concurrency
 
@@ -577,8 +860,9 @@ The API tracks RFID reader connections in process memory through [`RfidConnectio
 
 1. **Client Check**: `Connect` checks the remote client IP and declines a new connection when that IP already has a tracked session.
 2. **Device Check**: `Connect` checks the reader `ip:port` and declines a new connection when that reader is already tracked.
-3. **Session Lifecycle**: Each successful connection receives a unique GUID `connectionId`. All subsequent tag and workflow requests must supply this `connectionId`.
-4. **Cleanup**: Calling the `/api/uhf/disconnect` endpoint releases the hardware TCP socket and removes the connection session from memory. Sessions are not persisted and are lost when the process stops.
+3. **Session Lifecycle**: Each successful connection receives a unique GUID `connection_id`. All subsequent tag and workflow requests must supply this `connection_id` via the `connectionId` query parameter.
+4. **Inventory Guard**: `UhfService` tracks inventory state via `IsInventory`. Calling `start-read` while already scanning returns `502 Bad Gateway`; `stop-read` while not scanning also returns `502 Bad Gateway`.
+5. **Cleanup**: Calling `/api/uhf/disconnect` releases the hardware TCP socket and removes the connection session from memory. Sessions are not persisted and are lost when the process stops.
 
 The client and device checks happen before the new session is added and are not a distributed or atomic lock. Simultaneous connection attempts or multiple application instances can therefore bypass the checks.
 

@@ -2,10 +2,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RFIDAPI.Configurations;
+using RFIDAPI.Constants;
+using RFIDAPI.Helpers;
 using RFIDAPI.Managers;
 using RFIDAPI.Models;
 using RFIDAPI.Services;
-using RFIDAPI.Constants;
 
 namespace RFIDAPI.Controllers;
 
@@ -18,7 +19,7 @@ namespace RFIDAPI.Controllers;
  */
 [ApiController]
 [Route("api/uhf")]
-[Authorize(Roles = "rfid-client-service")]
+[Authorize(Roles = "default-roles-service")]
 public class UhfController : ControllerBase
 {
     private readonly IDbContextFactory<AppDbContext> _factory;
@@ -34,6 +35,21 @@ public class UhfController : ControllerBase
         _connectionManager = connectionManager;
     }
 
+    private IActionResult OkResponse<T>(T data)
+    {
+        return StatusCode(StatusCodes.Status200OK, ApiResponse.Ok(data));
+    }
+
+    private IActionResult CreatedResponse<T>(T data)
+    {
+        return StatusCode(StatusCodes.Status201Created, ApiResponse.Success(StatusCodes.Status201Created, data));
+    }
+
+    private IActionResult ErrorResponse(int statusCode, string errorMessage)
+    {
+        return StatusCode(statusCode, ApiResponse.Error(statusCode, errorMessage));
+    }
+
     /**
      * RFID main method
      * @function {connect, disconnect, read, write, start-read, stop-read}
@@ -45,40 +61,17 @@ public class UhfController : ControllerBase
 
         if (string.IsNullOrEmpty(clientIp))
         {
-            return BadRequest(new
-            {
-                result = false,
-                status = ConnectionStatus.UNABLE_IDENTIFY_CLIENT
-            });
+            return ErrorResponse(StatusCodes.Status400BadRequest, ConnectionStatus.UNABLE_IDENTIFY_CLIENT);
         }
 
         if (_connectionManager.IsClientConnected(clientIp))
         {
-            return new JsonResult(new
-            {
-                result = false,
-                status = ConnectionStatus.CLIENT_ALREADY_CONNECT
-            });
-        }
-
-        string rfidKey = ip + ":" + port;
-
-        if (string.IsNullOrEmpty(rfidKey))
-        {
-            return BadRequest(new
-            {
-                result = false,
-                status = ConnectionStatus.KEY_EMPTY
-            });
+            return ErrorResponse(StatusCodes.Status400BadRequest, ConnectionStatus.CLIENT_ALREADY_CONNECT);
         }
 
         if (_connectionManager.IsDeviceInUse(ip, port))
         {
-            return new JsonResult(new
-            {
-                result = false,
-                status = ConnectionStatus.IN_USE
-            });
+            return ErrorResponse(StatusCodes.Status400BadRequest, ConnectionStatus.IN_USE);
         }
 
         var service = new UhfService(_factory);
@@ -87,11 +80,7 @@ public class UhfController : ControllerBase
 
         if (!result)
         {
-            return new JsonResult(new
-            {
-                result = false,
-                status = ConnectionStatus.CAN_NOT_CONNECT + " " + ip + ":" + port
-            });
+            return ErrorResponse(StatusCodes.Status502BadGateway, $"{ConnectionStatus.CAN_NOT_CONNECT} {ip}:{port}");
         }
 
         string connectionId = Guid.NewGuid().ToString();
@@ -107,12 +96,12 @@ public class UhfController : ControllerBase
         };
 
         _connectionManager.AddConnection(connection);
-        
-        return new JsonResult(new
+
+        return OkResponse(new DeviceConnectionData
         {
-            result = true,
-            connectionId,
-            status = ConnectionStatus.CONNECTED
+            DeviceAddress = $"{ip}:{port}",
+            ConnectionId = connectionId,
+            Message = ConnectionStatus.CONNECTED
         });
     }
 
@@ -123,12 +112,10 @@ public class UhfController : ControllerBase
 
         if (connection == null)
         {
-            return NotFound(new
-            {
-                result = false,
-                status = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"The connection_id {connectionId} not found.");
         }
+
+        string deviceAddress = $"{connection.DeviceIp}:{connection.DevicePort}";
 
         var result = connection.Service.Disconnect(
             connection.DeviceIp,
@@ -136,12 +123,16 @@ public class UhfController : ControllerBase
 
         _connectionManager.RemoveConnection(connectionId);
 
-        return new JsonResult(new
+        if (!result)
         {
-            result,
-            status = result
-                ? ConnectionStatus.DISCONNECTED
-                : ConnectionStatus.CAN_NOT_DISCONNECT
+            return ErrorResponse(StatusCodes.Status502BadGateway, ConnectionStatus.CAN_NOT_DISCONNECT);
+        }
+
+        return OkResponse(new DeviceConnectionData
+        {
+            DeviceAddress = deviceAddress,
+            ConnectionId = null,
+            Message = ConnectionStatus.DISCONNECTED
         });
     }
 
@@ -152,25 +143,22 @@ public class UhfController : ControllerBase
 
         if (connection == null)
         {
-            return NotFound(new
-            {
-                message = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"The connection_id {connectionId} not found.");
         }
 
         var epcCode = await UhfService.ReadSingleEPC();
 
-        if (epcCode == string.Empty)
+        if (string.IsNullOrWhiteSpace(epcCode))
         {
-            return NotFound(new
-            {
-                message = Common.TAG_READ_FAILED
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, Common.TAG_READ_FAILED);
         }
 
-        return new JsonResult(new
+        var formattedEpc = StringUtils.FormatEpcWithSpaces(epcCode);
+
+        return OkResponse(new TagOperationData
         {
-            epcCode
+            EpcCode = formattedEpc,
+            Message = "Tag read successful"
         });
     }
 
@@ -181,35 +169,29 @@ public class UhfController : ControllerBase
 
         if (connection == null)
         {
-            return NotFound(new
-            {
-                message = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"The connection_id {connectionId} not found.");
         }
 
-        if (string.IsNullOrEmpty(epcCode))
+        var normalizedEpc = epcCode.Replace(" ", string.Empty, StringComparison.Ordinal);
+
+        if (normalizedEpc.Length != 24 || !StringUtils.IsHexNumber(normalizedEpc))
         {
-            return NotFound(new
-            {
-                message = Common.EPC_NOT_FOUND
-            });
+            return ErrorResponse(StatusCodes.Status400BadRequest, Common.EPC_NOT_VALID);
         }
 
-        if (epcCode.Length != 24)
+        var result = await UhfService.WriteSingleEPC(normalizedEpc);
+
+        if (!result)
         {
-            return NotFound(new
-            {
-                message = Common.EPC_NOT_VALID
-            });
+            return ErrorResponse(StatusCodes.Status502BadGateway, Common.TAG_WRITE_FAILED);
         }
 
-        var result = await UhfService.WriteSingleEPC(epcCode);
+        var formattedEpc = StringUtils.FormatEpcWithSpaces(normalizedEpc);
 
-        return new JsonResult(new
+        return OkResponse(new TagOperationData
         {
-            result,
-            epcCode,
-            status = result ? Common.SUCCESS : Common.FAILED
+            EpcCode = formattedEpc,
+            Message = "Tag write successful"
         });
     }
 
@@ -217,21 +199,22 @@ public class UhfController : ControllerBase
     public IActionResult StartRead([FromQuery] string connectionId)
     {
         var connection = _connectionManager.GetConnection(connectionId);
-        
+
         if (connection == null)
         {
-            return NotFound(new
-            {
-                message = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"The connection_id {connectionId} not found.");
         }
 
         var result = connection.Service.StartReadInventory();
 
-        return new JsonResult(new
+        if (!result)
         {
-            result,
-            status = result ? Common.START_READ_TAG : Common.START_READ_FAILED
+            return ErrorResponse(StatusCodes.Status502BadGateway, Common.START_READ_FAILED);
+        }
+
+        return OkResponse(new MessageData
+        {
+            Message = Common.START_READ_TAG
         });
     }
 
@@ -242,18 +225,19 @@ public class UhfController : ControllerBase
 
         if (connection == null)
         {
-            return NotFound(new
-            {
-                message = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"The connection_id {connectionId} not found.");
         }
 
         var result = connection.Service.StopReadInventory();
 
-        return new JsonResult(new
+        if (!result)
         {
-            result,
-            status = result ? Common.STOP_READ_TAG : Common.STOP_READ_FAILED
+            return ErrorResponse(StatusCodes.Status502BadGateway, Common.STOP_READ_FAILED);
+        }
+
+        return OkResponse(new MessageData
+        {
+            Message = Common.STOP_READ_TAG
         });
     }
 
@@ -268,65 +252,40 @@ public class UhfController : ControllerBase
 
         if (connection == null)
         {
-            return NotFound(new
-            {
-                message = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
-        }
-
-        if (string.IsNullOrEmpty(barcode))
-        {
-            return NotFound(new
-            {
-                message = Common.BARCODE_NULL_EMPTY
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"The connection_id {connectionId} not found.");
         }
 
         string hexEpc = await UhfService.ReadSingleEPC();
-        string epc = hexEpc.Replace(" ", "");
+        string epc = hexEpc.Replace(" ", string.Empty, StringComparison.Ordinal);
 
         if (string.IsNullOrEmpty(epc))
         {
-            return NotFound(new
-            {
-                message = Common.TAG_NOT_FOUND
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, Common.TAG_NOT_FOUND);
         }
 
-        if (!string.Equals(epc, "000000000000000000000000"))
+        if (!string.Equals(epc, "000000000000000000000000", StringComparison.OrdinalIgnoreCase))
         {
-            return NotFound(new
-            {
-                message = Common.REQ_INIT_EPC
-            });
+            var expectedBlankEpc = StringUtils.FormatEpcWithSpaces("000000000000000000000000");
+            return ErrorResponse(StatusCodes.Status404NotFound, $"EPC code not valid. Required EPC code {expectedBlankEpc}");
         }
 
         var sampleBarcode = await connection.Service.FindBarcode(barcode);
 
         if (string.IsNullOrEmpty(sampleBarcode.barcode))
         {
-            return NotFound(new
-            {
-                message = "[" + barcode + "] " + Common.BARCODE_NOT_EXIST
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{barcode} {Common.BARCODE_NOT_EXIST}");
         }
 
         if (sampleBarcode.prod_mk == "Y")
         {
-            return NotFound(new
-            {
-                message = "[" + sampleBarcode.barcode + "] " + Common.BARCODE_ALREADY_PRODUCTION
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{sampleBarcode.barcode} {Common.BARCODE_ALREADY_PRODUCTION}");
         }
 
         var writeEpc = await UhfService.WriteSingleEPC(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
 
         if (!writeEpc)
         {
-            return NotFound(new
-            {
-                message = Common.TAG_WRITE_FAILED
-            });
+            return ErrorResponse(StatusCodes.Status502BadGateway, Common.TAG_WRITE_FAILED);
         }
 
         var updateResult = await connection.Service.UpdateSampleBarcodeProdMark(sampleBarcode.barcode);
@@ -337,33 +296,20 @@ public class UhfController : ControllerBase
 
             if (!rollbackEpc)
             {
-                return NotFound(new
-                {
-                    message = Common.TAG_ROLLBACK_FAILED
-                });
+                return ErrorResponse(StatusCodes.Status502BadGateway, Common.TAG_ROLLBACK_FAILED);
             }
 
-            return NotFound(new
-            {
-                message = Common.UPDATE_PROD_FAILED
-            });
+            return ErrorResponse(StatusCodes.Status500InternalServerError, Common.UPDATE_PROD_FAILED);
         }
 
         var result = await connection.Service.FindBarcode(barcode);
 
         if (string.IsNullOrEmpty(result.barcode))
         {
-            return NotFound(new
-            {
-                message = "[" + barcode + "] " + Common.BARCODE_NOT_EXIST
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"[{barcode}] {Common.BARCODE_NOT_EXIST}");
         }
 
-        return new JsonResult(new
-        {
-            result,
-            status = Common.SUCCESS
-        });
+        return OkResponse(result);
     }
 
     [HttpPost("warehouse-stock-in")]
@@ -373,48 +319,37 @@ public class UhfController : ControllerBase
 
         if (connection == null)
         {
-            return NotFound(new
-            {
-                message = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"The connection_id {connectionId} not found.");
         }
 
         string hexEpc = await UhfService.ReadSingleEPC();
-        string epc = hexEpc.Replace(" ", "");
+        string epc = hexEpc.Replace(" ", string.Empty, StringComparison.Ordinal);
+
+        if (string.IsNullOrEmpty(epc) || epc.Length < 20)
+        {
+            return ErrorResponse(StatusCodes.Status404NotFound, Common.TAG_NOT_FOUND);
+        }
+
         string rfidCode = epc.Substring(0, 20);
 
-        if (string.IsNullOrEmpty(epc))
-        {
-            return NotFound(new
-            {
-                message = Common.TAG_NOT_FOUND
-            });
-        }        
-
         var sampleBarcode = await connection.Service.FindRFIDCode(rfidCode);
-        
+
         if (string.IsNullOrEmpty(sampleBarcode.rfid_code))
         {
-            return NotFound(new
-            {
-                message = "[" + rfidCode + "] " + Common.TAG_NOT_EXIST
-            });
+            var formattedEpc = StringUtils.FormatEpcWithSpaces(epc);
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{formattedEpc} {Common.TAG_NOT_EXIST}");
         }
 
         if (sampleBarcode.prod_mk == "N")
         {
-            return NotFound(new
-            {
-                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_NOT_PRODUCTION
-            });
+            var formattedEpc = StringUtils.FormatEpcWithSpaces(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{formattedEpc} {Common.TAG_NOT_PRODUCTION}");
         }
 
         if (sampleBarcode.inout_mk == "A")
         {
-            return NotFound(new
-            {
-                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_IN_WAREHOUSE
-            });
+            var formattedEpc = StringUtils.FormatEpcWithSpaces(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{formattedEpc} {Common.TAG_IN_WAREHOUSE}");
         }
 
         string demMk = "1111";
@@ -424,10 +359,7 @@ public class UhfController : ControllerBase
 
         if (!writeEpc)
         {
-            return NotFound(new
-            {
-                message = Common.TAG_WRITE_FAILED
-            });
+            return ErrorResponse(StatusCodes.Status502BadGateway, Common.TAG_WRITE_FAILED);
         }
 
         var updateResult = await connection.Service.UpdateSampleBarcodeInoutMark(sampleBarcode.rfid_code, demMk, inoutMk);
@@ -438,33 +370,21 @@ public class UhfController : ControllerBase
 
             if (!rollbackEpc)
             {
-                return NotFound(new
-                {
-                    message = Common.TAG_ROLLBACK_FAILED
-                });
+                return ErrorResponse(StatusCodes.Status502BadGateway, Common.TAG_ROLLBACK_FAILED);
             }
 
-            return NotFound(new
-            {
-                message = Common.UPDATE_INOUT_FAILED
-            });
+            return ErrorResponse(StatusCodes.Status500InternalServerError, Common.UPDATE_INOUT_FAILED);
         }
 
         var result = await connection.Service.FindRFIDCode(rfidCode);
-        
+
         if (string.IsNullOrEmpty(result.rfid_code))
         {
-            return NotFound(new
-            {
-                message = "[" + rfidCode + "] " + Common.TAG_NOT_EXIST
-            });
+            var formattedEpc = StringUtils.FormatEpcWithSpaces(rfidCode);
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{formattedEpc} {Common.TAG_NOT_EXIST}");
         }
 
-        return new JsonResult(new
-        {
-            result,
-            status = Common.SUCCESS
-        });
+        return OkResponse(result);
     }
 
     [HttpPost("warehouse-stock-out")]
@@ -474,58 +394,45 @@ public class UhfController : ControllerBase
 
         if (connection == null)
         {
-            return NotFound(new
-            {
-                message = ConnectionStatus.CONNECTION_NOT_FOUND
-            });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"The connection_id {connectionId} not found.");
         }
 
         string hexEpc = await UhfService.ReadSingleEPC();
-        string epc = hexEpc.Replace(" ", "");
+        string epc = hexEpc.Replace(" ", string.Empty, StringComparison.Ordinal);
+
+        if (string.IsNullOrEmpty(epc) || epc.Length < 20)
+        {
+            return ErrorResponse(StatusCodes.Status404NotFound, Common.TAG_NOT_FOUND);
+        }
+
         string rfidCode = epc.Substring(0, 20);
 
-        if (string.IsNullOrEmpty(epc))
-        {
-            return NotFound(new
-            {
-                message = Common.TAG_NOT_FOUND
-            });
-        }        
-
         var sampleBarcode = await connection.Service.FindRFIDCode(rfidCode);
-        
+
         if (string.IsNullOrEmpty(sampleBarcode.rfid_code))
         {
-            return NotFound(new
-            {
-                message = "[" + rfidCode + "] " + Common.TAG_NOT_EXIST
-            });
+            var formattedEpc = StringUtils.FormatEpcWithSpaces(epc);
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{formattedEpc} {Common.TAG_NOT_EXIST}");
         }
 
         if (sampleBarcode.prod_mk == "N")
         {
-            return NotFound(new
-            {
-                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_NOT_PRODUCTION
-            });
+            var formattedEpc = StringUtils.FormatEpcWithSpaces(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{formattedEpc} {Common.TAG_NOT_PRODUCTION}");
         }
 
         if (string.IsNullOrEmpty(sampleBarcode.inout_mk))
         {
             connection.Service.StopReadInventory();
 
-            return NotFound(new
-            {
-                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_NOT_IN_WAREHOSUE
-            });                
+            var formattedEpc = StringUtils.FormatEpcWithSpaces(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{formattedEpc} {Common.TAG_NOT_IN_WAREHOUSE}");
         }
 
         if (sampleBarcode.inout_mk == "B")
         {
-            return NotFound(new
-            {
-                message = "[" + sampleBarcode.rfid_code + sampleBarcode.dem_mk + "] " + Common.TAG_OUT_WAREHOUSE
-            });
+            var formattedEpc = StringUtils.FormatEpcWithSpaces(sampleBarcode.rfid_code + sampleBarcode.dem_mk);
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{formattedEpc} {Common.TAG_OUT_WAREHOUSE}");
         }
 
         string demMk = "0000";
@@ -535,10 +442,7 @@ public class UhfController : ControllerBase
 
         if (!writeEpc)
         {
-            return NotFound(new
-            {
-                message = Common.TAG_WRITE_FAILED
-            });
+            return ErrorResponse(StatusCodes.Status502BadGateway, Common.TAG_WRITE_FAILED);
         }
 
         var updateResult = await connection.Service.UpdateSampleBarcodeInoutMark(sampleBarcode.rfid_code, demMk, inoutMk);
@@ -549,33 +453,21 @@ public class UhfController : ControllerBase
 
             if (!rollbackEpc)
             {
-                return NotFound(new
-                {
-                    message = Common.TAG_ROLLBACK_FAILED
-                });
+                return ErrorResponse(StatusCodes.Status502BadGateway, Common.TAG_ROLLBACK_FAILED);
             }
 
-            return NotFound(new
-            {
-                message = Common.UPDATE_INOUT_FAILED
-            });
+            return ErrorResponse(StatusCodes.Status500InternalServerError, Common.UPDATE_INOUT_FAILED);
         }
 
         var result = await connection.Service.FindRFIDCode(rfidCode);
-        
+
         if (string.IsNullOrEmpty(result.rfid_code))
         {
-            return NotFound(new
-            {
-                message = "[" + rfidCode + "] " + Common.TAG_NOT_EXIST
-            });
+            var formattedEpc = StringUtils.FormatEpcWithSpaces(rfidCode);
+            return ErrorResponse(StatusCodes.Status404NotFound, $"{formattedEpc} {Common.TAG_NOT_EXIST}");
         }
 
-        return new JsonResult(new
-        {
-            result,
-            status = Common.SUCCESS
-        });
+        return OkResponse(result);
     }
 
     /**
@@ -591,7 +483,7 @@ public class UhfController : ControllerBase
             .OrderBy(x => x.id)
             .ToListAsync();
 
-        return new JsonResult(rows);
+        return OkResponse(rows);
     }
 
     [HttpPost("sample-barcode")]
@@ -602,13 +494,13 @@ public class UhfController : ControllerBase
             string.IsNullOrWhiteSpace(sampleBarcode.dem_mk) ||
             string.IsNullOrWhiteSpace(sampleBarcode.prod_mk))
         {
-            return BadRequest(new { message = "Barcode, RFID code, DEM mark, and production mark are required." });
+            return ErrorResponse(StatusCodes.Status400BadRequest, "Barcode, RFID code, DEM mark, and production mark are required.");
         }
 
         await using var db = await _factory.CreateDbContextAsync();
         if (await db.SampleBarcodes.CountAsync() >= 2)
         {
-            return Conflict(new { message = "The sample_barcode table is limited to two records." });
+            return ErrorResponse(StatusCodes.Status409Conflict, "The sample barcode table is limited to a maximum of two records.");
         }
 
         var created = new SampleBarcode
@@ -622,7 +514,7 @@ public class UhfController : ControllerBase
         db.SampleBarcodes.Add(created);
         await db.SaveChangesAsync();
 
-        return new JsonResult(created) { StatusCode = StatusCodes.Status201Created };
+        return CreatedResponse(created);
     }
 
     [HttpPut("sample-barcode/{id:int}")]
@@ -633,14 +525,14 @@ public class UhfController : ControllerBase
             string.IsNullOrWhiteSpace(sampleBarcode.dem_mk) ||
             string.IsNullOrWhiteSpace(sampleBarcode.prod_mk))
         {
-            return BadRequest(new { message = "Barcode, RFID code, DEM mark, and production mark are required." });
+            return ErrorResponse(StatusCodes.Status400BadRequest, "Barcode, RFID code, DEM mark, and production mark are required.");
         }
 
         await using var db = await _factory.CreateDbContextAsync();
         var existing = await db.SampleBarcodes.FirstOrDefaultAsync(x => x.id == id);
         if (existing == null)
         {
-            return NotFound(new { message = $"Sample barcode record {id} was not found." });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"Sample barcode record with ID {id} was not found.");
         }
 
         existing.barcode = sampleBarcode.barcode.Trim();
@@ -650,7 +542,7 @@ public class UhfController : ControllerBase
         existing.inout_mk = sampleBarcode.inout_mk?.Trim();
         await db.SaveChangesAsync();
 
-        return new JsonResult(existing);
+        return OkResponse(existing);
     }
 
     [HttpDelete("sample-barcode/{id:int}")]
@@ -660,7 +552,7 @@ public class UhfController : ControllerBase
         var existing = await db.SampleBarcodes.FirstOrDefaultAsync(x => x.id == id);
         if (existing == null)
         {
-            return NotFound(new { message = $"Sample barcode record {id} was not found." });
+            return ErrorResponse(StatusCodes.Status404NotFound, $"Sample barcode record with ID {id} was not found.");
         }
 
         db.SampleBarcodes.Remove(existing);

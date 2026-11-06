@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 using RFIDAPI.Configurations;
 using RFIDAPI.Managers;
+using RFIDAPI.Models;
 
 namespace RFIDAPI;
 
@@ -74,7 +76,29 @@ public static class Program
          * Controllers service👇
          * @function {AddControllers}
          */
-        builder.Services.AddControllers();
+        builder.Services.AddControllers()
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower;
+                options.JsonSerializerOptions.DictionaryKeyPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower;
+            })
+            .ConfigureApiBehaviorOptions(options =>
+            {
+                options.InvalidModelStateResponseFactory = context =>
+                {
+                    var errorEntry = context.ModelState
+                        .FirstOrDefault(kvp => kvp.Value?.Errors.Count > 0);
+
+                    var rawMessage = errorEntry.Value?.Errors[0].ErrorMessage
+                        ?? "Validation error occurred.";
+
+                    var normalizedMessage = rawMessage
+                        .Replace("connectionId", "connection_id", StringComparison.Ordinal)
+                        .Replace("epcCode", "epc_code", StringComparison.Ordinal);
+
+                    return new BadRequestObjectResult(ApiResponse.Error(StatusCodes.Status400BadRequest, normalizedMessage));
+                };
+            });
 
         /**
          * Singleton Service

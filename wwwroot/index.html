@@ -1151,13 +1151,15 @@
         if (ep.path === '/connect' && res.ok) {
           try {
             const data = JSON.parse(raw);
-            if (data.connectionId) setConnectionId(data.connectionId);
+            const connId = data.data?.connection_id ?? data.connectionId ?? data.connection_id;
+            if (connId) setConnectionId(connId);
           } catch { }
         }
 
         if (ep.path === '/disconnect' && res.ok) {
           try {
-            if (JSON.parse(raw).result) setConnectionId('');
+            const parsed = JSON.parse(raw);
+            if (parsed.success || parsed.result) setConnectionId('');
           } catch { }
         }
       } catch (error) {
@@ -1217,8 +1219,9 @@
         });
         if (generation !== barcodeFetchGeneration) return;
         if (!res.ok) throw new Error(formatHttpStatus(res));
-        const rows = await res.json();
+        const rawRows = await res.json();
         if (generation !== barcodeFetchGeneration) return;
+        const rows = Array.isArray(rawRows) ? rawRows : (rawRows?.data || []);
         sampleBarcodeCount = rows.length;
         body.replaceChildren();
         if (!rows.length) {
