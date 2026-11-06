@@ -19,7 +19,7 @@ namespace RFIDAPI.Controllers;
  */
 [ApiController]
 [Route("api/uhf")]
-[Authorize(Roles = "default-roles-service")]
+[Authorize(Roles = "rfid-client-service")]
 public class UhfController : ControllerBase
 {
     private readonly IDbContextFactory<AppDbContext> _factory;
