@@ -28,7 +28,6 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
   - [Warehouse Stock Out](#9-warehouse-stock-out)
 - [Database Management Methods](#database-management-methods)
 - [Connection Management & Concurrency](#connection-management--concurrency)
-- [HTTP Testing](#http-testing)
 
 ---
 
@@ -110,7 +109,6 @@ rfidapi/
 ├── appsettings.json             # Application configuration
 ├── Program.cs                   # Dependency injection, authentication, middleware, routes, and model binding error factory
 ├── RFIDAPI.csproj               # .NET target, packages, and native dependency copy rules
-├── RFIDAPI.http                 # REST Client requests (store credentials securely)
 ├── RFIDAPI.sln                  # Visual Studio solution
 └── rfid-icon.ico                # Windows executable icon
 ```
@@ -868,10 +866,3 @@ The client and device checks happen before the new session is added and are not 
 
 ---
 
-## HTTP Testing
-
-A REST Client request file is available in the repository root:
-
-- [`RFIDAPI.http`](RFIDAPI.http): Contains requests for obtaining an IAM token and calling the API. Treat its IAM client secret and access token values as credentials: replace them with secure local values before use or sharing, and never commit real credentials or tokens.
-
-Run the requests in Visual Studio or Visual Studio Code with the **REST Client** extension.
