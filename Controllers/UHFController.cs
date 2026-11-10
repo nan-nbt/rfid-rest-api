@@ -15,11 +15,11 @@ namespace RFIDAPI.Controllers;
  * RBAC (Role Based Access Control) Integration
  * @required {Authorization, Client Custom Role}
  * - Authorization: Bearer - OAuth2.0
- * - Client Custom Role: rfid-client-service
+ * - Client Custom Role: default-roles-service
  */
 [ApiController]
 [Route("api/uhf")]
-[Authorize(Roles = "rfid-client-service")]
+[Authorize(Roles = "default-roles-service")]
 public class UhfController : ControllerBase
 {
     private readonly IDbContextFactory<AppDbContext> _factory;

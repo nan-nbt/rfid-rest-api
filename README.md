@@ -55,7 +55,7 @@ RFIDAPI is a .NET 9 ASP.NET Core Web API for UHF RFID readers on Windows x86. It
   - All response messages in the controller are defined as constants in the `RFIDAPI.Constants` namespace (`Constants/Common.cs` and `Constants/ConnectionStatus.cs`) for consistency and maintainability.
 - **Security & Authorization**:
   - JWT Bearer Authentication integrated with IAM / Keycloak OAuth 2.0.
-  - Role-Based Access Control (RBAC) enforcing the `rfid-client-service` role parsed from token `realm_access.roles`.
+  - Role-Based Access Control (RBAC) enforcing the `default-roles-service` role parsed from token `realm_access.roles`.
 - **Database & Persistence**:
   - Entity Framework Core with PostgreSQL provider (`IDbContextFactory<AppDbContext>`).
   - Sample barcode entity mapping (`sample_barcode` table).
@@ -131,7 +131,7 @@ rfidapi/
 1. **.NET 9.0 SDK**.
 2. **Windows Operating System**: The native UHF reader libraries (`libs/UHFAPI.dll`, `libs/UHFControl.dll`) are 32-bit Windows DLLs. The project targets `x86` and must run in a compatible Windows environment.
 3. **PostgreSQL Database**: Accessible database instance hosting the `sample_barcode` table.
-4. **IAM / Keycloak Service**: An OAuth 2.0 / OIDC provider issuing JWT access tokens with the `rfid-client-service` role in `realm_access.roles`.
+4. **IAM / Keycloak Service**: An OAuth 2.0 / OIDC provider issuing JWT access tokens with the `default-roles-service` role in `realm_access.roles`.
 5. **UHF RFID Reader**: Network-enabled UHF RFID reader reachable over TCP/IP.
 
 ---
@@ -223,7 +223,7 @@ Configured in [`Properties/launchSettings.json`](Properties/launchSettings.json)
 
 ## Authentication & RBAC
 
-All endpoints under [`UhfController`](Controllers/UHFController.cs) require a valid bearer token with the `rfid-client-service` role. The controller reads role names from the token's `realm_access.roles` claim.
+All endpoints under [`UhfController`](Controllers/UHFController.cs) require a valid bearer token with the `default-roles-service` role. The controller reads role names from the token's `realm_access.roles` claim.
 
 ### 1. Acquiring an IAM Access Token
 
